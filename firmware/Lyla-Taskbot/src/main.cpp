@@ -70,7 +70,7 @@ void note_activity(unsigned long now) {
 }
 
 void maybe_play_idle_chatter(unsigned long now) {
-  if (online_is_active() || audio_playback_is_busy()) return;
+  if (lyla::online_is_active() || lyla::audio_playback_is_busy()) return;
   if (now < g_next_idle_chatter_at) return;
   if (now - g_last_activity_at < kIdleChatterMinMs) {
     schedule_idle_chatter(now);
