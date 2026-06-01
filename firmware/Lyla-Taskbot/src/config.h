@@ -25,13 +25,13 @@
 
 // Face region of interest (matches Smooth-v5).
 #define LYLA_FACE_ROI_X       18
-#define LYLA_FACE_ROI_Y       48
+#define LYLA_FACE_ROI_Y       34
 #define LYLA_FACE_ROI_W      284
-#define LYLA_FACE_ROI_H      160
+#define LYLA_FACE_ROI_H      174
 
 // Server screen_text region (below the face). Cleared on online_idle.
 #define LYLA_TEXT_ROI_X        4
-#define LYLA_TEXT_ROI_Y      210
+#define LYLA_TEXT_ROI_Y      208
 #define LYLA_TEXT_ROI_W      312
 #define LYLA_TEXT_ROI_H       28
 
