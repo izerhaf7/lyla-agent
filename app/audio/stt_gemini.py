@@ -13,10 +13,11 @@ from app.audio._seam import ConfigurationError, TranscriptionResult
 
 
 _GEMINI_TRANSCRIBE_PROMPT = (
-    "Transcribe the audio in Bahasa Indonesia. "
-    "Output ONLY the literal transcript text, no commentary, no quotes, "
-    "no formatting. If the audio is silent or unintelligible, output an "
-    "empty string."
+    "Transcribe the audio verbatim in whatever language is spoken "
+    "(Indonesian or English). Do NOT translate; keep the original "
+    "language and words exactly as spoken. Output ONLY the literal "
+    "transcript text, no commentary, no quotes, no formatting. If the "
+    "audio is silent or unintelligible, output an empty string."
 )
 
 
