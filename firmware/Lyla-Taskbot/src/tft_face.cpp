@@ -382,13 +382,15 @@ void draw_server_sad(float alpha, unsigned long now) {
 void draw_server_thinking(float alpha, unsigned long now) {
   if (!visible(alpha)) return;
   uint16_t black = alpha_color(C_BLACK, alpha);
-  int bob = (int)roundf(sinf((float)now * 0.0035f) * 1.5f);
-  draw_thick_line(55, 78 + bob, 111, 78 + bob, black, max(1, (int)roundf(4.0f * alpha)));
-  draw_thick_line(209, 78 + bob, 265, 78 + bob, black, max(1, (int)roundf(4.0f * alpha)));
-  fill_ellipse(83, 94 + bob, 12, 16, black);
-  fill_ellipse(236, 94 - bob, 12, 16, black);
-  draw_idle_mouth(alpha, bob * 0.2f);
   float phase = (float)now * 0.005f;
+  int bob = (int)roundf(sinf((float)now * 0.0035f) * 1.5f);
+  int brow = (int)roundf(sinf(phase) * 2.0f);
+  int eye_ry = 16 - (int)roundf((0.5f + 0.5f * sinf(phase * 0.55f)) * 3.0f);
+  draw_thick_line(58, 70 + bob + brow, 108, 76 + bob, black, max(1, (int)roundf(4.0f * alpha)));
+  draw_thick_line(212, 76 + bob, 262, 70 + bob + brow, black, max(1, (int)roundf(4.0f * alpha)));
+  fill_ellipse(83, 98 + bob, 12, max(9, eye_ry), black);
+  fill_ellipse(236, 98 - bob, 12, max(9, eye_ry), black);
+  draw_idle_mouth(alpha, bob * 0.2f);
   for (int i = 0; i < 3; ++i) {
     float t = phase + i * 0.6f;
     float yo = sinf(t) * 6.0f;
@@ -412,24 +414,26 @@ void draw_rotating_face(float alpha, unsigned long now) {
   uint16_t grey = alpha_color(0xDAD6, alpha);
   float tilt = constrain(g_tilt_amount, -1.0f, 1.0f);
   float wobble = sinf((float)now * 0.007f) * 0.08f;
-  float angle = tilt * 0.35f + wobble;
-  fill_ellipse(83 + (int)roundf(tilt * 10.0f), 92 - (int)roundf(tilt * 5.0f), 10, 18, black);
-  fill_ellipse(236 + (int)roundf(tilt * 10.0f), 92 + (int)roundf(tilt * 5.0f), 10, 18, black);
+  int ldx = (int)roundf(tilt * 14.0f);
+  int rdx = (int)roundf(tilt * 14.0f);
+  int ldy = (int)roundf(tilt * 9.0f);
+  int rdy = (int)roundf(tilt * 9.0f);
+  fill_ellipse(83 + ldx, 92 + ldy, 10, 20, black);
+  fill_ellipse(236 + rdx, 92 - rdy, 10, 20, black);
+  draw_thick_line(62 + ldx, 132 + ldy, 88 + ldx, 116 + ldy, black, max(1, (int)roundf(3.0f * alpha)));
+  draw_thick_line(215 + rdx, 70 - rdy, 258 + rdx, 58 - rdy, black, max(1, (int)roundf(3.0f * alpha)));
+
   int cx = 160;
   int cy = 152;
-  int px = cx;
-  int py = cy;
-  for (int i = 0; i < 28; ++i) {
-    float a = angle + ((float)i / 27.0f) * (float)PI * 1.25f;
-    float r = 10.0f + (float)i * 0.85f;
-    int x = cx + (int)roundf(cosf(a) * r);
-    int y = cy + (int)roundf(sinf(a) * r * 0.58f);
-    if (i > 0) draw_thick_line(px, py, x, y, i < 8 ? grey : green, 3);
-    px = x;
-    py = y;
-  }
-  draw_quadratic(60, 138, 76, 126, 96, 120, black, max(1, (int)roundf(3.0f * alpha)));
-  draw_quadratic(224, 80, 244, 68, 268, 60, black, max(1, (int)roundf(3.0f * alpha)));
+  int liquid = (int)roundf((tilt * 18.0f) + wobble * 22.0f);
+  fill_ellipse(cx, cy + 2, 38, 30, green);
+  g_fb->fillRect(cx - 42, cy - 32, 84, 30 + liquid / 3, C_BG);
+  draw_quadratic(cx - 38, cy - 8 + liquid, cx, cy + 8 - liquid, cx + 38, cy - 8 - liquid,
+                 grey, max(1, (int)roundf(4.0f * alpha)));
+  draw_quadratic(cx - 40, cy - 2, cx, cy + 34, cx + 40, cy - 2,
+                 black, max(1, (int)roundf(4.0f * alpha)));
+  draw_quadratic(cx - 40, cy - 2, cx, cy - 18, cx + 40, cy - 2,
+                 black, max(1, (int)roundf(4.0f * alpha)));
 }
 
 const char* state_label_for(Emotion e) {
@@ -481,11 +485,12 @@ void render_emotion_solid(Emotion e, float t, float blink, float breath,
     case EMO_HAPPY:
       if (g_talking_active) {
         float mouth = 0.40f + 0.45f * fabsf(sinf(t * 0.0105f));
+        draw_happy_eyes(1.0f, 1.0f, 0.0f, 0.0f, breath * 0.18f);
         draw_open_bmo_mouth(1.0f, mouth, breath * 0.8f, t);
       } else {
         draw_idle_mouth(1.0f, breath * 0.8f);
+        draw_happy_eyes(1.0f, blink, g_look_x, g_look_y, breath * 0.25f);
       }
-      draw_happy_eyes(1.0f, blink, g_look_x, g_look_y, breath * 0.25f);
       break;
     case EMO_SATISFIED:
       draw_smile_mouth(1.0f, satisfied_bob, t);
@@ -534,32 +539,33 @@ void render_emotion_solid(Emotion e, float t, float blink, float breath,
       break;
     case EMO_SERVER_HAPPY:
       if (g_talking_active) {
-        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), breath * 0.30f, t);
+        draw_happy_eyes(1.0f, 1.0f, 0.0f, 0.0f, breath * 0.12f);
+        draw_open_bmo_mouth(1.0f, 0.40f + 0.45f * fabsf(sinf(t * 0.0105f)), breath * 0.30f, t);
       } else {
         draw_smile_mouth(1.0f, breath * 0.30f, t);
+        draw_happy_eyes(1.0f, 1.0f, 0.0f, 0.0f, breath * 0.18f);
       }
-      draw_happy_eyes(1.0f, 1.0f, 0.0f, 0.0f, breath * 0.18f);
       break;
     case EMO_SERVER_SAD:
       if (g_talking_active) {
-        draw_server_sad(1.0f, now);
-        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), breath * 0.25f, t);
+        draw_happy_eyes(1.0f, 1.0f, 0.0f, 0.0f, breath * 0.12f);
+        draw_open_bmo_mouth(1.0f, 0.40f + 0.45f * fabsf(sinf(t * 0.0105f)), breath * 0.25f, t);
       } else {
         draw_server_sad(1.0f, now);
       }
       break;
     case EMO_SERVER_THINKING:
       if (g_talking_active) {
-        draw_server_thinking(1.0f, now);
-        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), breath * 0.25f, t);
+        draw_happy_eyes(1.0f, 1.0f, 0.0f, 0.0f, breath * 0.12f);
+        draw_open_bmo_mouth(1.0f, 0.40f + 0.45f * fabsf(sinf(t * 0.0105f)), breath * 0.25f, t);
       } else {
         draw_server_thinking(1.0f, now);
       }
       break;
     case EMO_SERVER_NEUTRAL:
       if (g_talking_active) {
-        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), breath * 0.25f, t);
         draw_happy_eyes(1.0f, 1.0f, 0.0f, 0.0f, breath * 0.12f);
+        draw_open_bmo_mouth(1.0f, 0.40f + 0.45f * fabsf(sinf(t * 0.0105f)), breath * 0.25f, t);
       } else {
         draw_server_neutral(1.0f);
       }

@@ -100,6 +100,8 @@ void calibrate_mpu() {
   g_last_az = g_mpu.getAccZ();
   g_shake_filtered = 0.0f;
   g_mpu_ready = true;
+  LYLA_LOG("MPU steady baseline set from boot pose: angleX=%.1f angleY=%.1f; tilt is relative to this pose",
+           g_calib_x, g_calib_y);
 }
 
 float current_tilt_delta() {
@@ -111,6 +113,10 @@ float current_tilt_delta() {
 
 bool update_tilt_state(bool shake_hit, unsigned long now) {
   if (!g_mpu_ready || shake_hit || lyla::online_is_active()) {
+    if (shake_hit && g_tilt_active) {
+      g_tilt_active = false;
+      g_tilt_relief_event = false;
+    }
     g_tilt_candidate_since = 0;
     return g_tilt_active;
   }
@@ -312,10 +318,11 @@ void loop() {
 
   bool tilt_now = update_tilt_state(shake_hit, now);
   bool play_dizzy_sound = false;
-  if (tilt_now) {
-    shake_hit = false;
-  } else if (shake_hit && !lyla::online_is_active()) {
+  if (shake_hit && !lyla::online_is_active()) {
     play_dizzy_sound = true;
+    tilt_now = false;
+  } else if (tilt_now) {
+    shake_hit = false;
   }
 
   lyla::offline_dispatch_inputs(touched, shake_hit, tilt_now, g_tilt_amount);
