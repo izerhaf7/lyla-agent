@@ -14,7 +14,6 @@ namespace {
 enum Emotion : uint8_t {
   EMO_HAPPY = 0,
   EMO_SATISFIED,
-  EMO_SHY,
   EMO_DIZZY,
   EMO_ANGRY,
   EMO_ANGRY_IDLE,
@@ -57,6 +56,7 @@ String g_status_text;
 bool g_offline_input_suppressed = false;
 bool g_talking_active = false;
 const char* g_last_logged_state = nullptr;
+bool g_angry_started_event = false;
 
 float clamp01(float v) {
   if (v < 0.0f) return 0.0f;
@@ -229,22 +229,6 @@ void draw_satisfied_eyes(float alpha, float bob) {
   draw_quadratic(220, 77 + b, 236, 113 + b, 252, 77 + b, black, thick);
 }
 
-void draw_shy_face(float alpha, float bob) {
-  if (!visible(alpha)) return;
-  uint16_t black = alpha_color(C_BLACK, alpha);
-  uint16_t blush = alpha_color(0x546A, alpha * 0.62f);
-  int b = (int)roundf(bob * 0.35f);
-  draw_happy_eyes(alpha, 1.0f, 0.0f, 0.0f, b);
-  draw_cubic(131, 157 + b, 141, 173 + b, 171, 182 + b, 189, 157 + b,
-             black, max(1, (int)roundf(4.0f * alpha)));
-  draw_cubic(126, 174 + b, 136, 168 + b, 134, 145 + b, 126, 140 + b,
-             black, max(1, (int)roundf(4.0f * alpha)));
-  draw_cubic(194, 140 + b, 185, 146 + b, 183, 168 + b, 194, 174 + b,
-             black, max(1, (int)roundf(4.0f * alpha)));
-  fill_ellipse(58, 131 + b, 16, 12, blush);
-  fill_ellipse(262, 131 + b, 16, 12, blush);
-}
-
 void draw_open_bmo_mouth(float alpha, float openness, float bob, float live) {
   if (!visible(alpha)) return;
   openness = clamp01(openness);
@@ -408,7 +392,6 @@ const char* state_label_for(Emotion e) {
   switch (e) {
     case EMO_HAPPY: return "state: idle";
     case EMO_SATISFIED: return "state: touched";
-    case EMO_SHY: return "state: shy";
     case EMO_DIZZY: return "state: shaked (dizzy)";
     case EMO_ANGRY: return "state: shaked (angry)";
     case EMO_ANGRY_IDLE: return "state: angry idle";
@@ -451,9 +434,6 @@ void render_emotion_solid(Emotion e, float t, float blink, float breath,
     case EMO_SATISFIED:
       draw_smile_mouth(1.0f, satisfied_bob, t);
       draw_satisfied_eyes(1.0f, satisfied_bob);
-      break;
-    case EMO_SHY:
-      draw_shy_face(1.0f, satisfied_bob);
       break;
     case EMO_DIZZY:
       draw_dizzy_eyes(1.0f, spin);
@@ -706,6 +686,9 @@ void set_emotion(Emotion next) {
   g_transition_started_at = millis();
   g_emo_started_at = millis();
   g_in_transition = true;
+  if (next == EMO_ANGRY) {
+    g_angry_started_event = true;
+  }
 }
 
 void update_transition() {
@@ -752,11 +735,8 @@ void update_state_machine(bool touched, bool shake_hit) {
       break;
     case EMO_SATISFIED:
       if (!touched && (now - g_last_touch_at > kSatisfiedHoldMs)) {
-        set_emotion(EMO_SHY);
+        set_emotion(EMO_HAPPY);
       }
-      break;
-    case EMO_SHY:
-      if (now - g_emo_started_at >= 1600) set_emotion(EMO_HAPPY);
       break;
     case EMO_DIZZY:
       if (now - g_emo_started_at >= 2000) set_emotion(EMO_ANGRY);
@@ -773,6 +753,12 @@ void update_state_machine(bool touched, bool shake_hit) {
 
 void offline_dispatch_inputs(bool touched, bool shake_detected) {
   update_state_machine(touched, shake_detected);
+}
+
+bool offline_consume_angry_started() {
+  bool started = g_angry_started_event;
+  g_angry_started_event = false;
+  return started;
 }
 
 }

@@ -43,8 +43,13 @@ PHRASES: dict[str, str] = {
     "ok_generic.wav": "Okay, all done.",
     "err_generic.wav": "Oops, something went wrong, please try again.",
     "act_dizzy.wav": "Whoa-whoa-woooawao!",
-    "tilt_balance.wav": "Wowoowowoww, BMO is balancing!",
-    "tilt_relief.wav": "Huft, all steady now.",
+    "act_angry_complain.wav": "Will you stop doing that?",
+    "idle_chatter_1.wav": "BMO is not bored. BMO is just waiting dramatically.",
+    "idle_chatter_2.wav": "Sometimes I think about sandwiches and tiny adventures.",
+    "idle_chatter_3.wav": "If you need help, press the button. I am very ready.",
+    "idle_chatter_4.wav": "BMO fun fact: homework is easier when we do it together.",
+    "idle_chatter_5.wav": "I am practicing being patient. I am very good at it now.",
+    "idle_chatter_6.wav": "Hello quiet room. BMO is still here.",
 }
 
 #: Maps each static asset filename to a director_map key so MiMo synthesis
@@ -61,8 +66,13 @@ ASSET_DIRECTOR_KEY: dict[str, str] = {
     "ok_generic.wav": "ok_generic",
     "err_generic.wav": "err_generic",
     "act_dizzy.wav": "dizzy",
-    "tilt_balance.wav": "balance",
-    "tilt_relief.wav": "relieved",
+    "act_angry_complain.wav": "annoyed",
+    "idle_chatter_1.wav": "idle_chatter",
+    "idle_chatter_2.wav": "idle_chatter",
+    "idle_chatter_3.wav": "idle_chatter",
+    "idle_chatter_4.wav": "idle_chatter",
+    "idle_chatter_5.wav": "idle_chatter",
+    "idle_chatter_6.wav": "idle_chatter",
 }
 
 

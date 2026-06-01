@@ -25,7 +25,7 @@ float g_calib_x = 0.0f, g_calib_y = 0.0f;
 float g_last_ax = 0.0f, g_last_ay = 0.0f, g_last_az = 0.0f;
 float g_shake_filtered = 0.0f;
 unsigned long g_last_shake_at = 0;
-constexpr float kShakeTrigger = 17.0f;
+constexpr float kShakeTrigger = 10.0f;
 constexpr unsigned long kShakeLockoutMs = 1100;
 
 bool g_last_touch_raw = false;
@@ -44,6 +44,49 @@ unsigned long g_btn_last_flap_log_ms = 0;
 unsigned long g_btn_noise_locked_until_ms = 0;
 
 unsigned long g_last_frame_at = 0;
+unsigned long g_last_activity_at = 0;
+unsigned long g_next_idle_chatter_at = 0;
+uint8_t g_last_idle_chatter_index = 255;
+
+constexpr unsigned long kIdleChatterMinMs = 120000;
+constexpr unsigned long kIdleChatterJitterMs = 90000;
+
+const char* const kIdleChatterSounds[] = {
+  "/sounds/idle_chatter_1.wav",
+  "/sounds/idle_chatter_2.wav",
+  "/sounds/idle_chatter_3.wav",
+  "/sounds/idle_chatter_4.wav",
+  "/sounds/idle_chatter_5.wav",
+  "/sounds/idle_chatter_6.wav",
+};
+
+void schedule_idle_chatter(unsigned long now) {
+  g_next_idle_chatter_at = now + kIdleChatterMinMs + random(kIdleChatterJitterMs);
+}
+
+void note_activity(unsigned long now) {
+  g_last_activity_at = now;
+  schedule_idle_chatter(now);
+}
+
+void maybe_play_idle_chatter(unsigned long now) {
+  if (online_is_active() || audio_playback_is_busy()) return;
+  if (now < g_next_idle_chatter_at) return;
+  if (now - g_last_activity_at < kIdleChatterMinMs) {
+    schedule_idle_chatter(now);
+    return;
+  }
+
+  constexpr uint8_t count = sizeof(kIdleChatterSounds) / sizeof(kIdleChatterSounds[0]);
+  uint8_t index = (uint8_t)random(count);
+  if (count > 1 && index == g_last_idle_chatter_index) {
+    index = (uint8_t)((index + 1) % count);
+  }
+  g_last_idle_chatter_index = index;
+  lyla::render_frame();
+  lyla::audio_playback_play_sd_or_tone(kIdleChatterSounds[index]);
+  note_activity(millis());
+}
 
 bool read_touch_stable() {
   bool raw = digitalRead(LYLA_TOUCH_PIN);
@@ -246,6 +289,7 @@ void setup() {
   g_btn_stable_pressed = g_btn_last_raw;
   g_btn_last_change_ms = millis();
   randomSeed((uint32_t)esp_random());
+  note_activity(millis());
   LYLA_LOG("setup complete; entering main loop");
 }
 
@@ -256,6 +300,7 @@ void loop() {
   bool touched = read_touch_stable();
   if (touched) {
     g_last_touch_at = now;
+    note_activity(now);
   }
 
   bool shake_hit = false;
@@ -264,6 +309,7 @@ void loop() {
       g_shake_filtered > kShakeTrigger) {
     shake_hit = true;
     g_last_shake_at = now;
+    note_activity(now);
   }
 
   bool play_dizzy_sound = false;
@@ -273,18 +319,26 @@ void loop() {
 
   lyla::offline_dispatch_inputs(touched, shake_hit);
   if (play_dizzy_sound) {
+    lyla::render_frame();
     lyla::audio_playback_play_sd_or_tone("/sounds/act_dizzy.wav");
+  }
+  if (lyla::offline_consume_angry_started()) {
+    lyla::render_frame();
+    lyla::audio_playback_play_sd_or_tone("/sounds/act_angry_complain.wav");
   }
 
   BtnEdge edge = poll_button_edge();
   if (edge == BtnEdge::Pressed) {
+    note_activity(now);
     lyla::online_on_button_pressed();
   } else if (edge == BtnEdge::Released) {
+    note_activity(now);
     lyla::online_on_button_released();
   }
 
   lyla::online_loop(now);
   lyla::update_offline_inputs();
+  maybe_play_idle_chatter(now);
 
   if (now - g_last_frame_at >= LYLA_TFT_FRAME_MS) {
     g_last_frame_at = now;
