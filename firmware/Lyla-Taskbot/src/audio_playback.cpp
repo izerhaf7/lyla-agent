@@ -14,6 +14,28 @@ namespace {
 bool g_installed = false;
 uint32_t g_current_rate = 0;
 volatile bool g_busy = false;
+bool g_response_talking = false;
+unsigned long g_last_talking_frame_at = 0;
+
+void begin_talking_if_needed() {
+  if (!g_response_talking) return;
+  g_last_talking_frame_at = 0;
+  set_talking_active(true);
+}
+
+void pump_talking_frame() {
+  if (!g_response_talking) return;
+  unsigned long now = millis();
+  if (g_last_talking_frame_at != 0 && now - g_last_talking_frame_at < 120) return;
+  g_last_talking_frame_at = now;
+  render_frame();
+}
+
+void end_talking_if_needed() {
+  if (!g_response_talking) return;
+  set_talking_active(false);
+  render_frame();
+}
 
 bool install_i2s_output(uint32_t sample_rate) {
   if (g_installed && g_current_rate == sample_rate) return true;
@@ -78,7 +100,7 @@ void write_pcm_blocking(const uint8_t* pcm, size_t pcm_bytes) {
                               chunk, &written, pdMS_TO_TICKS(200));
     if (err != ESP_OK || written == 0) break;
     written_total += written;
-    render_frame();
+    pump_talking_frame();
   }
   i2s_zero_dma_buffer(LYLA_SPK_I2S_NUM);
 }
@@ -124,7 +146,7 @@ bool audio_playback_play_sd(const char* path) {
     return false;
   }
   g_busy = true;
-  set_talking_active(true);
+  begin_talking_if_needed();
   uint8_t chunk[1024];
   while (f.available()) {
     int n = f.read(chunk, sizeof(chunk));
@@ -132,12 +154,11 @@ bool audio_playback_play_sd(const char* path) {
     size_t written = 0;
     i2s_write(LYLA_SPK_I2S_NUM, chunk, (size_t)n, &written,
               pdMS_TO_TICKS(500));
-    render_frame();
+    pump_talking_frame();
   }
   f.close();
   i2s_zero_dma_buffer(LYLA_SPK_I2S_NUM);
-  set_talking_active(false);
-  render_frame();
+  end_talking_if_needed();
   g_busy = false;
   return true;
 }
@@ -155,7 +176,7 @@ bool audio_playback_play_tone(uint16_t frequency_hz, uint16_t duration_ms) {
   if (period_samples < 2) period_samples = 2;
 
   g_busy = true;
-  set_talking_active(true);
+  begin_talking_if_needed();
   uint32_t produced = 0;
   while (produced < total_samples) {
     size_t n = total_samples - produced;
@@ -168,12 +189,11 @@ bool audio_playback_play_tone(uint16_t frequency_hz, uint16_t duration_ms) {
     esp_err_t err = i2s_write(LYLA_SPK_I2S_NUM, samples, n * sizeof(int16_t),
                               &written, pdMS_TO_TICKS(200));
     if (err != ESP_OK || written == 0) break;
-    render_frame();
+    pump_talking_frame();
     produced += (uint32_t)(written / sizeof(int16_t));
   }
   i2s_zero_dma_buffer(LYLA_SPK_I2S_NUM);
-  set_talking_active(false);
-  render_frame();
+  end_talking_if_needed();
   g_busy = false;
   return produced > 0;
 }
@@ -202,12 +222,18 @@ bool audio_playback_play_wav_bytes(const uint8_t* data, size_t len) {
   }
   if (!install_i2s_output(rate)) return false;
   g_busy = true;
-  set_talking_active(true);
+  begin_talking_if_needed();
   write_pcm_blocking(data + 44, len - 44);
-  set_talking_active(false);
-  render_frame();
+  end_talking_if_needed();
   g_busy = false;
   return true;
+}
+
+void audio_playback_set_response_talking(bool enabled) {
+  g_response_talking = enabled;
+  if (!enabled) {
+    set_talking_active(false);
+  }
 }
 
 bool audio_playback_is_busy() {

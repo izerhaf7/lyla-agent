@@ -18,6 +18,8 @@ bool audio_playback_play_tone(uint16_t frequency_hz, uint16_t duration_ms);
 
 bool audio_playback_play_wav_bytes(const uint8_t* data, size_t len);
 
+void audio_playback_set_response_talking(bool enabled);
+
 bool audio_playback_is_busy();
 
 void audio_playback_stop();

@@ -128,7 +128,9 @@ void send_audio_and_play(uint32_t recording_duration_ms) {
       return;
     }
     transition(OnlineState::PlayingResponse);
+    audio_playback_set_response_talking(true);
     directive_dispatch(*g_cfg, d);
+    audio_playback_set_response_talking(false);
     transition(OnlineState::Idle);
     clear_server_face_override();
     clear_status_message();
