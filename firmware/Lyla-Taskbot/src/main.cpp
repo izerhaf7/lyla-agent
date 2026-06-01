@@ -320,11 +320,15 @@ void loop() {
   lyla::offline_dispatch_inputs(touched, shake_hit);
   if (play_dizzy_sound) {
     lyla::render_frame();
+    lyla::audio_playback_set_visual_animation(true);
     lyla::audio_playback_play_sd_or_tone("/sounds/act_dizzy.wav");
+    lyla::audio_playback_set_visual_animation(false);
   }
   if (lyla::offline_consume_angry_started()) {
     lyla::render_frame();
+    lyla::audio_playback_set_visual_animation(true);
     lyla::audio_playback_play_sd_or_tone("/sounds/act_angry_complain.wav");
+    lyla::audio_playback_set_visual_animation(false);
   }
 
   BtnEdge edge = poll_button_edge();

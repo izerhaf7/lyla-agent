@@ -20,6 +20,8 @@ bool audio_playback_play_wav_bytes(const uint8_t* data, size_t len);
 
 void audio_playback_set_response_talking(bool enabled);
 
+void audio_playback_set_visual_animation(bool enabled);
+
 bool audio_playback_is_busy();
 
 void audio_playback_stop();
