@@ -26,4 +26,8 @@ uint32_t audio_capture_sample_rate();
 
 uint16_t audio_capture_last_peak();
 
+uint16_t audio_capture_session_max_peak();
+
+uint32_t audio_capture_voice_active_ms();
+
 }

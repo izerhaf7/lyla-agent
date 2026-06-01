@@ -41,8 +41,15 @@ unsigned long g_btn_last_change_ms = 0;
 constexpr unsigned long kButtonDebounceMs = 80;
 unsigned long g_btn_flap_count = 0;
 unsigned long g_btn_last_flap_log_ms = 0;
+unsigned long g_btn_noise_locked_until_ms = 0;
 
 unsigned long g_last_frame_at = 0;
+bool g_tilt_active = false;
+unsigned long g_tilt_candidate_since = 0;
+unsigned long g_last_tilt_done_at = 0;
+float g_tilt_amount = 0.0f;
+bool g_tilt_started_event = false;
+bool g_tilt_relief_event = false;
 
 bool read_touch_stable() {
   bool raw = digitalRead(LYLA_TOUCH_PIN);
@@ -95,6 +102,44 @@ void calibrate_mpu() {
   g_mpu_ready = true;
 }
 
+float current_tilt_delta() {
+  if (!g_mpu_ready) return 0.0f;
+  float dx = fabsf(g_mpu.getAngleX() - g_calib_x);
+  float dy = fabsf(g_mpu.getAngleY() - g_calib_y);
+  return dx > dy ? dx : dy;
+}
+
+bool update_tilt_state(bool shake_hit, unsigned long now) {
+  if (!g_mpu_ready || shake_hit || lyla::online_is_active()) {
+    g_tilt_candidate_since = 0;
+    return g_tilt_active;
+  }
+  float delta = current_tilt_delta();
+  g_tilt_amount = constrain((g_mpu.getAngleX() - g_calib_x) / 45.0f, -1.0f, 1.0f);
+  if (g_tilt_active) {
+    if (delta <= LYLA_TILT_RECOVER_DEGREE) {
+      g_tilt_active = false;
+      g_last_tilt_done_at = now;
+      g_tilt_relief_event = true;
+    }
+    return g_tilt_active;
+  }
+  if (now - g_last_tilt_done_at < LYLA_TILT_COOLDOWN_MS) {
+    g_tilt_candidate_since = 0;
+    return false;
+  }
+  if (delta >= LYLA_TILT_TRIGGER_DEGREE) {
+    if (g_tilt_candidate_since == 0) g_tilt_candidate_since = now;
+    if (now - g_tilt_candidate_since >= LYLA_TILT_MIN_HOLD_MS) {
+      g_tilt_active = true;
+      g_tilt_started_event = true;
+    }
+  } else {
+    g_tilt_candidate_since = 0;
+  }
+  return g_tilt_active;
+}
+
 void halt_with_message(const char* line1, const char* line2) {
   lyla::show_status_message(line1, line2);
   pinMode(LYLA_LED_PIN, OUTPUT);
@@ -121,10 +166,22 @@ BtnEdge poll_button_edge() {
   bool raw = sample_button_pressed_majority();
   unsigned long now = millis();
 
+  if (now < g_btn_noise_locked_until_ms) {
+    return BtnEdge::None;
+  }
+
   if (now - g_btn_last_flap_log_ms >= 1000) {
     if (g_btn_flap_count > 0) {
       LYLA_WARN("PTT raw flapped %lux in 1s (stable=%s); check wiring/noise",
                 g_btn_flap_count, g_btn_stable_pressed ? "PRESS" : "REL");
+      if (g_btn_flap_count >= LYLA_PTT_NOISE_FLAP_THRESHOLD) {
+        g_btn_noise_locked_until_ms = now + LYLA_PTT_NOISE_LOCKOUT_MS;
+        g_btn_last_raw = raw;
+        g_btn_stable_pressed = raw;
+        g_btn_last_change_ms = now;
+        LYLA_WARN("PTT noise lockout for %ums", (unsigned)LYLA_PTT_NOISE_LOCKOUT_MS);
+        lyla::online_on_button_noise_locked();
+      }
     }
     g_btn_flap_count = 0;
     g_btn_last_flap_log_ms = now;
@@ -169,36 +226,48 @@ void setup() {
   delay(400);
 
   auto cfg_outcome = lyla::load_device_config(g_cfg);
+  bool online_ready = (cfg_outcome.result == lyla::ConfigLoadResult::Ok);
+  String online_disabled_reason;
   if (cfg_outcome.result != lyla::ConfigLoadResult::Ok) {
-    String msg = lyla::config_load_result_message(cfg_outcome);
+    online_disabled_reason = lyla::config_load_result_message(cfg_outcome);
     if (cfg_outcome.detail.length() > 0) {
-      msg += ": ";
-      msg += cfg_outcome.detail;
+      online_disabled_reason += ": ";
+      online_disabled_reason += cfg_outcome.detail;
     }
-    halt_with_message("BMO", msg.c_str());
+    LYLA_WARN("online disabled: %s", online_disabled_reason.c_str());
+    lyla::show_status_message("BMO", online_disabled_reason.c_str());
+  } else {
+    LYLA_LOG("config ok device_code=%s base_url=%s",
+             g_cfg.device_code.c_str(), g_cfg.base_url.c_str());
   }
-  LYLA_LOG("config ok device_code=%s base_url=%s",
-           g_cfg.device_code.c_str(), g_cfg.base_url.c_str());
 
   if (!lyla::audio_capture_init()) {
-    halt_with_message("BMO", "Audio init error");
+    LYLA_WARN("audio capture init failed; online PTT disabled");
+    if (online_ready) {
+      online_ready = false;
+      online_disabled_reason = "Audio init error";
+    }
   }
   if (!lyla::audio_playback_init()) {
-    halt_with_message("BMO", "Audio init error");
+    LYLA_WARN("audio playback init failed; continuing visual-only");
   }
 
-  lyla::show_status_message("BMO", "Joining WiFi...");
-  lyla::network_init(g_cfg);
-  bool wifi_ok = lyla::network_wifi_connect(15000);
-  if (wifi_ok) {
-    if (!lyla::network_post_heartbeat(g_cfg, true)) {
-      LYLA_WARN("first heartbeat failed (non-fatal)");
+  if (online_ready) {
+    lyla::show_status_message("BMO", "Joining WiFi...");
+    lyla::network_init(g_cfg);
+    bool wifi_ok = lyla::network_wifi_connect(15000);
+    if (wifi_ok) {
+      if (!lyla::network_post_heartbeat(g_cfg, true)) {
+        LYLA_WARN("first heartbeat failed (non-fatal)");
+      }
+    } else {
+      LYLA_WARN("starting offline-only; wifi will retry in background");
     }
   } else {
-    LYLA_WARN("starting offline-only; wifi will retry in background");
+    LYLA_WARN("skipping WiFi; online disabled reason=%s", online_disabled_reason.c_str());
   }
 
-  if (!lyla::audio_playback_play_sd("/sounds/greet_hello.wav")) {
+  if (!lyla::audio_playback_play_sd_or_tone("/sounds/greet_hello.wav")) {
     LYLA_WARN("greet_hello.wav playback failed; check SD /sounds/ contents");
   } else {
     LYLA_LOG("greeting played; BMO ready");
@@ -208,7 +277,15 @@ void setup() {
   calibrate_mpu();
 
   lyla::clear_status_message();
-  lyla::online_init(g_cfg);
+  if (online_ready) {
+    lyla::online_init(g_cfg);
+  } else {
+    if (online_disabled_reason.length() == 0) {
+      online_disabled_reason = "Online tidak siap";
+    }
+    lyla::online_init_disabled(online_disabled_reason.c_str());
+    lyla::show_status_message_persistent(online_disabled_reason.c_str());
+  }
   g_btn_last_raw = (digitalRead(LYLA_PTT_PIN) == LOW);
   g_btn_stable_pressed = g_btn_last_raw;
   g_btn_last_change_ms = millis();
@@ -233,7 +310,29 @@ void loop() {
     g_last_shake_at = now;
   }
 
-  lyla::offline_dispatch_inputs(touched, shake_hit);
+  bool tilt_now = update_tilt_state(shake_hit, now);
+  bool play_dizzy_sound = false;
+  if (tilt_now) {
+    shake_hit = false;
+  } else if (shake_hit && !lyla::online_is_active()) {
+    play_dizzy_sound = true;
+  }
+
+  lyla::offline_dispatch_inputs(touched, shake_hit, tilt_now, g_tilt_amount);
+  if (play_dizzy_sound) {
+    lyla::audio_playback_play_sd_or_tone("/sounds/act_dizzy.wav");
+  }
+  if (g_tilt_started_event) {
+    g_tilt_started_event = false;
+    if (lyla::offline_is_rotating()) {
+      lyla::audio_playback_play_sd_or_tone("/sounds/tilt_balance.wav");
+    }
+  }
+  if (g_tilt_relief_event) {
+    g_tilt_relief_event = false;
+    lyla::offline_show_tilt_relief();
+    lyla::audio_playback_play_sd_or_tone("/sounds/tilt_relief.wav");
+  }
 
   BtnEdge edge = poll_button_edge();
   if (edge == BtnEdge::Pressed) {

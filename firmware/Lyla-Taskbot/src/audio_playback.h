@@ -12,6 +12,10 @@ bool audio_playback_init();
 
 bool audio_playback_play_sd(const char* path);
 
+bool audio_playback_play_sd_or_tone(const char* path);
+
+bool audio_playback_play_tone(uint16_t frequency_hz, uint16_t duration_ms);
+
 bool audio_playback_play_wav_bytes(const uint8_t* data, size_t len);
 
 bool audio_playback_is_busy();

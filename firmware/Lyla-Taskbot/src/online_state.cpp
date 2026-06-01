@@ -14,11 +14,16 @@ namespace lyla {
 namespace {
 
 const DeviceConfig* g_cfg = nullptr;
+bool g_online_disabled = false;
+String g_disabled_msg;
 
 OnlineState g_state = OnlineState::Idle;
 unsigned long g_state_entered_at = 0;
 unsigned long g_record_started_at = 0;
 unsigned long g_last_heartbeat_at = 0;
+unsigned long g_next_ptt_allowed_at = 0;
+unsigned long g_rate_window_started_at = 0;
+uint8_t g_rate_window_count = 0;
 
 bool g_button_held = false;
 
@@ -36,17 +41,37 @@ void show_status_for_seconds(const char* msg, unsigned long ms) {
 }
 
 void enter_error(const char* msg) {
-  audio_playback_play_sd("/sounds/err_generic.wav");
+  audio_playback_play_sd_or_tone("/sounds/err_generic.wav");
   set_server_face_override(ServerFace::Sad, String());
   show_status_for_seconds(msg, 3000);
   transition(OnlineState::ShowingError);
 }
 
-void enter_offline_notice() {
-  audio_playback_play_sd("/sounds/err_generic.wav");
+void enter_offline_notice(const char* msg = "Tidak ada internet") {
+  audio_playback_play_sd_or_tone("/sounds/err_generic.wav");
   set_server_face_override(ServerFace::Sad, String());
-  show_status_for_seconds("Tidak ada internet", LYLA_OFFLINE_NOTICE_MS);
+  show_status_for_seconds(msg, LYLA_OFFLINE_NOTICE_MS);
   transition(OnlineState::ShowingOfflineNotice);
+}
+
+bool ptt_request_allowed(unsigned long now, const char** reason) {
+  if (now < g_next_ptt_allowed_at) {
+    *reason = "Tunggu sebentar";
+    return false;
+  }
+  if (g_rate_window_started_at == 0 ||
+      now - g_rate_window_started_at >= LYLA_PTT_RATE_WINDOW_MS) {
+    g_rate_window_started_at = now;
+    g_rate_window_count = 0;
+  }
+  if (g_rate_window_count >= LYLA_PTT_RATE_MAX_REQUESTS) {
+    *reason = "Terlalu sering";
+    g_next_ptt_allowed_at = now + LYLA_PTT_COOLDOWN_MS;
+    return false;
+  }
+  g_rate_window_count++;
+  g_next_ptt_allowed_at = now + LYLA_PTT_COOLDOWN_MS;
+  return true;
 }
 
 const char* indonesian_for_status(int http_status) {
@@ -76,7 +101,7 @@ void send_audio_and_play(uint32_t recording_duration_ms) {
     return;
   }
 
-  audio_playback_play_sd("/sounds/ack_thinking.wav");
+  audio_playback_play_sd_or_tone("/sounds/ack_thinking.wav");
 
   AudioRequestTelemetry tele = {};
   tele.client_request_id = network_generate_uuid_v4();
@@ -131,17 +156,20 @@ void finish_recording(const char* reason) {
   uint32_t dur = (t >= g_record_started_at) ? (uint32_t)(t - g_record_started_at) : 0;
   audio_capture_stop();
   g_button_held = false;
-  if (audio_capture_size_bytes() > 0 && dur >= LYLA_MIN_RECORD_MS) {
+  uint16_t max_peak = audio_capture_session_max_peak();
+  uint32_t voice_ms = audio_capture_voice_active_ms();
+  if (audio_capture_size_bytes() > 0 && dur >= LYLA_MIN_RECORD_MS &&
+      max_peak >= LYLA_SILENCE_REJECT_PEAK && voice_ms >= LYLA_MIN_VOICE_ACTIVE_MS) {
     LYLA_LOG("PTT release stop (%s) after %ums (%u bytes)",
              reason, (unsigned)dur, (unsigned)audio_capture_size_bytes());
     transition(OnlineState::Sending);
     send_audio_and_play(dur);
   } else {
-    LYLA_WARN("recording too short (%ums); discard (%s)",
-              (unsigned)dur, reason);
+    LYLA_WARN("recording discarded (%ums peak=%u voice=%ums); %s",
+              (unsigned)dur, (unsigned)max_peak, (unsigned)voice_ms, reason);
     audio_capture_release();
     clear_server_face_override();
-    transition(OnlineState::Idle);
+    enter_offline_notice("Suara tidak terdengar");
   }
 }
 
@@ -149,15 +177,36 @@ void finish_recording(const char* reason) {
 
 void online_init(const DeviceConfig& cfg) {
   g_cfg = &cfg;
+  g_online_disabled = false;
+  g_disabled_msg = String();
   g_state = OnlineState::Idle;
   g_state_entered_at = millis();
   g_last_heartbeat_at = 0;
+  g_next_ptt_allowed_at = 0;
+  g_rate_window_started_at = 0;
+  g_rate_window_count = 0;
+  g_button_held = false;
+}
+
+void online_init_disabled(const char* indonesian_msg) {
+  g_cfg = nullptr;
+  g_online_disabled = true;
+  g_disabled_msg = indonesian_msg ? String(indonesian_msg) : String("Fitur online tidak siap");
+  g_state = OnlineState::Idle;
+  g_state_entered_at = millis();
+  g_last_heartbeat_at = 0;
+  g_next_ptt_allowed_at = 0;
+  g_rate_window_started_at = 0;
+  g_rate_window_count = 0;
   g_button_held = false;
 }
 
 void online_on_button_pressed() {
   if (g_state != OnlineState::Idle) return;
-  if (g_cfg == nullptr) return;
+  if (g_online_disabled || g_cfg == nullptr) {
+    enter_offline_notice(g_disabled_msg.length() > 0 ? g_disabled_msg.c_str() : "Fitur online tidak siap");
+    return;
+  }
   if (!network_wifi_is_connected()) {
     enter_offline_notice();
     return;
@@ -166,14 +215,25 @@ void online_on_button_pressed() {
     enter_error("Audio init error");
     return;
   }
+  const char* reject_reason = nullptr;
+  unsigned long now = millis();
+  if (!ptt_request_allowed(now, &reject_reason)) {
+    enter_offline_notice(reject_reason ? reject_reason : "Tunggu sebentar");
+    return;
+  }
   LYLA_LOG("PTT press; recording while held (max %ums)...",
            (unsigned)LYLA_MAX_RECORD_MS);
   audio_capture_start();
-  unsigned long now = millis();
   g_record_started_at = now;
   g_button_held = true;
   set_server_face_override(ServerFace::Thinking, String("Mendengarkan..."));
   transition(OnlineState::Recording);
+}
+
+void online_on_button_noise_locked() {
+  if (g_state != OnlineState::Idle) return;
+  g_next_ptt_allowed_at = millis() + LYLA_PTT_NOISE_LOCKOUT_MS;
+  enter_offline_notice("Tombol tidak stabil");
 }
 
 void online_on_button_released() {
@@ -184,13 +244,15 @@ void online_on_button_released() {
 }
 
 void online_loop(unsigned long now) {
-  network_wifi_loop();
+  if (!g_online_disabled) {
+    network_wifi_loop();
+  }
 
   switch (g_state) {
     case OnlineState::Idle: {
       if (now - g_last_heartbeat_at >= LYLA_HEARTBEAT_INTERVAL_MS) {
         g_last_heartbeat_at = now;
-        if (g_cfg != nullptr && network_wifi_is_connected()) {
+        if (!g_online_disabled && g_cfg != nullptr && network_wifi_is_connected()) {
           HeartbeatResult hb = network_post_heartbeat_with_commands(*g_cfg, true);
           if (hb.ok && hb.command_count > 0) {
             for (size_t i = 0; i < hb.command_count; ++i) {

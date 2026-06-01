@@ -23,11 +23,15 @@ enum class OnlineState : uint8_t {
 
 void online_init(const DeviceConfig& cfg);
 
+void online_init_disabled(const char* indonesian_msg);
+
 void online_loop(unsigned long now);
 
 void online_on_button_pressed();
 
 void online_on_button_released();
+
+void online_on_button_noise_locked();
 
 OnlineState online_current_state();
 

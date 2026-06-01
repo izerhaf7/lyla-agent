@@ -75,7 +75,7 @@ void directive_dispatch(const DeviceConfig& cfg, const Directive& d) {
   if (d.audio_code == AudioCode::FallbackTts) {
     if (d.fetch_url.length() == 0) {
       LYLA_WARN("directive: fallback_tts without fetch_url");
-      audio_playback_play_sd("/sounds/err_generic.wav");
+      audio_playback_play_sd_or_tone("/sounds/err_generic.wav");
       return;
     }
     TtsFetchResult tts = network_get_tts(cfg, d.fetch_url);
@@ -85,19 +85,19 @@ void directive_dispatch(const DeviceConfig& cfg, const Directive& d) {
       if (tts.bytes != nullptr) {
         free(tts.bytes);
       }
-      audio_playback_play_sd("/sounds/err_generic.wav");
+      audio_playback_play_sd_or_tone("/sounds/err_generic.wav");
       return;
     }
     if (!tts.protocol_version_ok) {
       LYLA_WARN("directive: tts protocol mismatch");
       free(tts.bytes);
-      audio_playback_play_sd("/sounds/err_generic.wav");
+      audio_playback_play_sd_or_tone("/sounds/err_generic.wav");
       return;
     }
     bool ok = audio_playback_play_wav_bytes(tts.bytes, tts.bytes_len);
     free(tts.bytes);
     if (!ok) {
-      audio_playback_play_sd("/sounds/err_generic.wav");
+      audio_playback_play_sd_or_tone("/sounds/err_generic.wav");
     }
     return;
   }
@@ -105,7 +105,9 @@ void directive_dispatch(const DeviceConfig& cfg, const Directive& d) {
   const char* path = directive_sd_path_for(d.audio_code);
   if (!audio_playback_play_sd(path)) {
     if (d.audio_code != AudioCode::ErrGeneric) {
-      audio_playback_play_sd("/sounds/err_generic.wav");
+      audio_playback_play_sd_or_tone("/sounds/err_generic.wav");
+    } else {
+      audio_playback_play_tone(880, 200);
     }
   }
 }

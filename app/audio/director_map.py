@@ -81,6 +81,21 @@ DIRECTOR_MAP: dict[str, tuple[str, str]] = {
         "slow as if figuring it out.",
         "(curious) ",
     ),
+    "dizzy": (
+        "Speak as BMO after being shaken. Sound woozy, wobbly, funny, and a "
+        "little surprised, with playful robot dizziness.",
+        "(dizzy) ",
+    ),
+    "balance": (
+        "Speak as BMO trying very hard to keep balance while tilted. Sound "
+        "wobbly, concentrated, and cute, like a little robot steadying itself.",
+        "(wobble) ",
+    ),
+    "relieved": (
+        "Speak as BMO after recovering balance. Sound relieved, soft, and "
+        "happy that everything is okay again.",
+        "(relieved sigh) ",
+    ),
     "goodbye": (
         "Speak as BMO saying a fond goodbye to a friend. Sound warm and a little "
         "wistful but sweet.",

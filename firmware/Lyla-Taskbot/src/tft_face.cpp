@@ -14,9 +14,12 @@ namespace {
 enum Emotion : uint8_t {
   EMO_HAPPY = 0,
   EMO_SATISFIED,
+  EMO_SHY,
   EMO_DIZZY,
   EMO_ANGRY,
   EMO_ANGRY_IDLE,
+  EMO_ROTATING,
+  EMO_RELIEVED,
   EMO_SERVER_HAPPY,
   EMO_SERVER_SAD,
   EMO_SERVER_THINKING,
@@ -54,6 +57,8 @@ bool g_status_active = false;
 String g_status_text;
 
 bool g_offline_input_suppressed = false;
+bool g_talking_active = false;
+float g_tilt_amount = 0.0f;
 
 float clamp01(float v) {
   if (v < 0.0f) return 0.0f;
@@ -209,6 +214,14 @@ void draw_happy_eyes(float alpha, float blink_scale, float lx, float ly, float b
   }
 }
 
+void draw_idle_mouth(float alpha, float bob) {
+  if (!visible(alpha)) return;
+  uint16_t black = alpha_color(C_BLACK, alpha);
+  int b = (int)roundf(bob * 0.20f);
+  draw_cubic(131, 146 + b, 140, 162 + b, 170, 171 + b, 189, 146 + b,
+             black, max(1, (int)roundf(5.0f * alpha)));
+}
+
 void draw_satisfied_eyes(float alpha, float bob) {
   if (!visible(alpha)) return;
   uint16_t black = alpha_color(C_BLACK, alpha);
@@ -216,6 +229,22 @@ void draw_satisfied_eyes(float alpha, float bob) {
   int thick = max(1, (int)roundf(4.0f * alpha));
   draw_quadratic(67, 77 + b, 83, 113 + b, 100, 77 + b, black, thick);
   draw_quadratic(220, 77 + b, 236, 113 + b, 252, 77 + b, black, thick);
+}
+
+void draw_shy_face(float alpha, float bob) {
+  if (!visible(alpha)) return;
+  uint16_t black = alpha_color(C_BLACK, alpha);
+  uint16_t blush = alpha_color(0x546A, alpha * 0.62f);
+  int b = (int)roundf(bob * 0.35f);
+  draw_happy_eyes(alpha, 1.0f, 0.0f, 0.0f, b);
+  draw_cubic(131, 157 + b, 141, 173 + b, 171, 182 + b, 189, 157 + b,
+             black, max(1, (int)roundf(4.0f * alpha)));
+  draw_cubic(126, 174 + b, 136, 168 + b, 134, 145 + b, 126, 140 + b,
+             black, max(1, (int)roundf(4.0f * alpha)));
+  draw_cubic(194, 140 + b, 185, 146 + b, 183, 168 + b, 194, 174 + b,
+             black, max(1, (int)roundf(4.0f * alpha)));
+  fill_ellipse(58, 131 + b, 16, 12, blush);
+  fill_ellipse(262, 131 + b, 16, 12, blush);
 }
 
 void draw_open_bmo_mouth(float alpha, float openness, float bob, float live) {
@@ -333,8 +362,7 @@ void draw_angry_mouth(float alpha, float twitch) {
   uint16_t black = alpha_color(C_BLACK, alpha);
   int j = (int)roundf(twitch);
   int thick = max(1, (int)roundf(4.0f * alpha));
-  draw_cubic(195, 169 + j, 182, 157 + j, 152, 159 - j, 139, 189 - j, black, thick);
-  draw_cubic(205, 147 - j, 194, 156 - j, 189, 180 + j, 209, 191 + j, black, thick);
+  draw_cubic(203, 180 + j, 188, 126 + j, 137, 115 - j, 113, 180 + j, black, thick);
 }
 
 void draw_server_sad(float alpha, unsigned long now) {
@@ -351,9 +379,12 @@ void draw_server_sad(float alpha, unsigned long now) {
 void draw_server_thinking(float alpha, unsigned long now) {
   if (!visible(alpha)) return;
   uint16_t black = alpha_color(C_BLACK, alpha);
-  fill_ellipse(83, 92, 7, 9, black);
-  fill_ellipse(236, 92, 7, 9, black);
-  draw_quadratic(130, 156, 160, 168, 189, 156, black, max(1, (int)roundf(4.0f * alpha)));
+  int bob = (int)roundf(sinf((float)now * 0.0035f) * 1.5f);
+  draw_thick_line(52, 78 + bob, 117, 78 + bob, black, max(1, (int)roundf(4.0f * alpha)));
+  draw_thick_line(204, 78 + bob, 268, 78 + bob, black, max(1, (int)roundf(4.0f * alpha)));
+  fill_ellipse(99, 94 + bob, 14, 16, black);
+  fill_ellipse(251, 94 - bob, 14, 16, black);
+  draw_idle_mouth(alpha, bob * 0.2f);
   float phase = (float)now * 0.005f;
   for (int i = 0; i < 3; ++i) {
     float t = phase + i * 0.6f;
@@ -371,6 +402,43 @@ void draw_server_neutral(float alpha) {
   draw_thick_line(140, 158, 180, 158, black, max(1, (int)roundf(5.0f * alpha)));
 }
 
+void draw_rotating_face(float alpha, unsigned long now) {
+  if (!visible(alpha)) return;
+  uint16_t black = alpha_color(C_BLACK, alpha);
+  uint16_t green = alpha_color(C_MOUTH, alpha);
+  uint16_t grey = alpha_color(0xDAD6, alpha);
+  float tilt = constrain(g_tilt_amount, -1.0f, 1.0f);
+  float wobble = sinf((float)now * 0.007f) * 0.10f;
+  float angle = tilt * 0.45f + wobble;
+  fill_ellipse(86 + (int)roundf(tilt * 12.0f), 98 - (int)roundf(tilt * 6.0f), 13, 21, black);
+  fill_ellipse(236 + (int)roundf(tilt * 12.0f), 98 + (int)roundf(tilt * 6.0f), 13, 21, black);
+  int cx = 160;
+  int cy = 154;
+  int px = cx;
+  int py = cy;
+  for (int i = 0; i < 34; ++i) {
+    float a = angle + ((float)i / 33.0f) * (float)PI * 1.35f;
+    float r = 15.0f + (float)i * 1.0f;
+    int x = cx + (int)roundf(cosf(a) * r);
+    int y = cy + (int)roundf(sinf(a) * r * 0.58f);
+    if (i > 0) draw_thick_line(px, py, x, y, i < 8 ? grey : green, 3);
+    px = x;
+    py = y;
+  }
+  draw_quadratic(70, 144, 82, 132, 104, 122, black, max(1, (int)roundf(3.0f * alpha)));
+  draw_quadratic(230, 88, 250, 74, 275, 62, black, max(1, (int)roundf(3.0f * alpha)));
+}
+
+void draw_relieved_face(float alpha, float bob) {
+  if (!visible(alpha)) return;
+  uint16_t black = alpha_color(C_BLACK, alpha);
+  int b = (int)roundf(bob * 0.25f);
+  draw_quadratic(66, 86 + b, 83, 102 + b, 100, 86 + b, black, max(1, (int)roundf(4.0f * alpha)));
+  draw_quadratic(220, 86 + b, 236, 102 + b, 252, 86 + b, black, max(1, (int)roundf(4.0f * alpha)));
+  draw_cubic(130, 149 + b, 145, 166 + b, 177, 166 + b, 190, 149 + b,
+             black, max(1, (int)roundf(5.0f * alpha)));
+}
+
 }
 }
 
@@ -383,37 +451,90 @@ void render_emotion_solid(Emotion e, float t, float blink, float breath,
                           unsigned long now) {
   switch (e) {
     case EMO_HAPPY:
-      draw_open_bmo_mouth(1.0f, 1.0f, breath * 0.8f, t);
+      if (g_talking_active) {
+        float mouth = 0.35f + 0.65f * fabsf(sinf(t * 0.0105f));
+        draw_open_bmo_mouth(1.0f, mouth, breath * 0.8f, t);
+      } else {
+        draw_idle_mouth(1.0f, breath * 0.8f);
+      }
       draw_happy_eyes(1.0f, blink, g_look_x, g_look_y, breath * 0.25f);
       break;
     case EMO_SATISFIED:
       draw_smile_mouth(1.0f, satisfied_bob, t);
       draw_satisfied_eyes(1.0f, satisfied_bob);
       break;
+    case EMO_SHY:
+      draw_shy_face(1.0f, satisfied_bob);
+      break;
     case EMO_DIZZY:
-      draw_dizzy_mouth(1.0f, spin);
       draw_dizzy_eyes(1.0f, spin);
+      if (g_talking_active) {
+        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), 0.0f, t);
+      } else {
+        draw_dizzy_mouth(1.0f, spin);
+      }
       break;
     case EMO_ANGRY:
-      draw_angry_mouth(1.0f, angry_twitch);
       draw_angry_eyes_brows(1.0f, angry_twitch);
+      if (g_talking_active) {
+        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), 0.0f, t);
+      } else {
+        draw_angry_mouth(1.0f, angry_twitch);
+      }
       break;
     case EMO_ANGRY_IDLE:
-      draw_smile_mouth(1.0f, breath * 0.45f, t);
-      draw_happy_eyes(1.0f, blink, g_look_x * 0.55f, g_look_y * 0.55f, breath * 0.18f);
+      draw_angry_eyes_brows(1.0f, angry_twitch * 0.35f);
+      if (g_talking_active) {
+        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), 0.0f, t);
+      } else {
+        draw_angry_mouth(1.0f, angry_twitch * 0.35f);
+      }
+      break;
+    case EMO_ROTATING:
+      draw_rotating_face(1.0f, now);
+      if (g_talking_active) {
+        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), 0.0f, t);
+      }
+      break;
+    case EMO_RELIEVED:
+      if (g_talking_active) {
+        draw_satisfied_eyes(1.0f, satisfied_bob);
+        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), satisfied_bob, t);
+      } else {
+        draw_relieved_face(1.0f, satisfied_bob);
+      }
       break;
     case EMO_SERVER_HAPPY:
-      draw_smile_mouth(1.0f, breath * 0.30f, t);
+      if (g_talking_active) {
+        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), breath * 0.30f, t);
+      } else {
+        draw_smile_mouth(1.0f, breath * 0.30f, t);
+      }
       draw_happy_eyes(1.0f, 1.0f, 0.0f, 0.0f, breath * 0.18f);
       break;
     case EMO_SERVER_SAD:
-      draw_server_sad(1.0f, now);
+      if (g_talking_active) {
+        draw_server_sad(1.0f, now);
+        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), breath * 0.25f, t);
+      } else {
+        draw_server_sad(1.0f, now);
+      }
       break;
     case EMO_SERVER_THINKING:
-      draw_server_thinking(1.0f, now);
+      if (g_talking_active) {
+        draw_server_thinking(1.0f, now);
+        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), breath * 0.25f, t);
+      } else {
+        draw_server_thinking(1.0f, now);
+      }
       break;
     case EMO_SERVER_NEUTRAL:
-      draw_server_neutral(1.0f);
+      if (g_talking_active) {
+        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), breath * 0.25f, t);
+        draw_happy_eyes(1.0f, 1.0f, 0.0f, 0.0f, breath * 0.12f);
+      } else {
+        draw_server_neutral(1.0f);
+      }
       break;
   }
 }
@@ -583,6 +704,10 @@ void set_offline_input_suppressed(bool suppressed) {
   g_offline_input_suppressed = suppressed;
 }
 
+void set_talking_active(bool active) {
+  g_talking_active = active;
+}
+
 }
 
 namespace lyla {
@@ -628,12 +753,23 @@ bool can_interrupt_for_shake() {
          g_target == EMO_ANGRY_IDLE;
 }
 
-void update_state_machine(bool touched, bool shake_hit) {
+bool can_interrupt_for_tilt() {
+  return g_target == EMO_HAPPY || g_target == EMO_SATISFIED ||
+         g_target == EMO_SHY || g_target == EMO_ANGRY_IDLE;
+}
+
+void update_state_machine(bool touched, bool shake_hit, bool tilt_active, float tilt_amount) {
   if (g_offline_input_suppressed) return;
   unsigned long now = millis();
+  g_tilt_amount = tilt_amount;
 
   if (touched) {
     g_last_touch_at = now;
+  }
+
+  if (tilt_active && can_interrupt_for_tilt()) {
+    set_emotion(EMO_ROTATING);
+    return;
   }
 
   if (can_interrupt_for_shake() &&
@@ -650,14 +786,23 @@ void update_state_machine(bool touched, bool shake_hit) {
       break;
     case EMO_SATISFIED:
       if (!touched && (now - g_last_touch_at > kSatisfiedHoldMs)) {
-        set_emotion(EMO_HAPPY);
+        set_emotion(EMO_SHY);
       }
+      break;
+    case EMO_SHY:
+      if (now - g_emo_started_at >= 1600) set_emotion(EMO_HAPPY);
       break;
     case EMO_DIZZY:
       if (now - g_emo_started_at >= 2000) set_emotion(EMO_ANGRY);
       break;
     case EMO_ANGRY:
       if (now - g_emo_started_at >= 2000) set_emotion(EMO_ANGRY_IDLE);
+      break;
+    case EMO_ROTATING:
+      if (!tilt_active) set_emotion(EMO_RELIEVED);
+      break;
+    case EMO_RELIEVED:
+      if (now - g_emo_started_at >= 1300) set_emotion(EMO_HAPPY);
       break;
     default:
       break;
@@ -666,8 +811,19 @@ void update_state_machine(bool touched, bool shake_hit) {
 
 }
 
-void offline_dispatch_inputs(bool touched, bool shake_detected) {
-  update_state_machine(touched, shake_detected);
+void offline_dispatch_inputs(bool touched, bool shake_detected,
+                             bool tilt_active, float tilt_amount) {
+  update_state_machine(touched, shake_detected, tilt_active, tilt_amount);
+}
+
+void offline_show_tilt_relief() {
+  if (!g_offline_input_suppressed && g_target == EMO_ROTATING) {
+    set_emotion(EMO_RELIEVED);
+  }
+}
+
+bool offline_is_rotating() {
+  return !g_offline_input_suppressed && g_target == EMO_ROTATING;
 }
 
 }

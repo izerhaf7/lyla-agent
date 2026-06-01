@@ -18,6 +18,7 @@ bool g_installed = false;
 uint16_t g_last_peak = 0;
 unsigned long g_last_peak_log_ms = 0;
 uint16_t g_session_max_peak = 0;
+uint32_t g_voice_active_ms = 0;
 bool g_dumped_raw_head = false;
 
 constexpr size_t kReadChunkSamples = 512;
@@ -80,6 +81,7 @@ void audio_capture_start() {
   g_write_offset = 0;
   g_last_peak = 0;
   g_session_max_peak = 0;
+  g_voice_active_ms = 0;
   g_last_peak_log_ms = 0;
   g_dumped_raw_head = false;
   i2s_start(LYLA_MIC_I2S_NUM);
@@ -112,6 +114,9 @@ bool audio_capture_pump() {
   }
   g_last_peak = peak;
   if (peak > g_session_max_peak) g_session_max_peak = peak;
+  if (peak >= LYLA_VAD_THRESHOLD) {
+    g_voice_active_ms += (uint32_t)((samples * 1000UL) / LYLA_MIC_SAMPLE_RATE);
+  }
   delay(20);
   g_write_offset += bytes_pending;
   return true;
@@ -150,6 +155,9 @@ bool audio_capture_pump() {
   }
   g_last_peak = peak;
   if (peak > g_session_max_peak) g_session_max_peak = peak;
+  if (peak >= LYLA_VAD_THRESHOLD) {
+    g_voice_active_ms += (uint32_t)((samples * 1000UL) / LYLA_MIC_SAMPLE_RATE);
+  }
 #if LYLA_MIC_PEAK_LOG_MS > 0
   unsigned long now_ms = millis();
   if (now_ms - g_last_peak_log_ms >= LYLA_MIC_PEAK_LOG_MS) {
@@ -186,6 +194,9 @@ void audio_capture_release() {
   }
   g_capacity_bytes = 0;
   g_write_offset = 0;
+  g_last_peak = 0;
+  g_session_max_peak = 0;
+  g_voice_active_ms = 0;
 }
 
 uint32_t audio_capture_sample_rate() {
@@ -194,6 +205,14 @@ uint32_t audio_capture_sample_rate() {
 
 uint16_t audio_capture_last_peak() {
   return g_last_peak;
+}
+
+uint16_t audio_capture_session_max_peak() {
+  return g_session_max_peak;
+}
+
+uint32_t audio_capture_voice_active_ms() {
+  return g_voice_active_ms;
 }
 
 }

@@ -2,8 +2,10 @@
 
 #include <SD_MMC.h>
 #include <driver/i2s.h>
+#include <string.h>
 
 #include "config.h"
+#include "tft_face.h"
 
 namespace lyla {
 
@@ -76,6 +78,7 @@ void write_pcm_blocking(const uint8_t* pcm, size_t pcm_bytes) {
                               chunk, &written, pdMS_TO_TICKS(200));
     if (err != ESP_OK || written == 0) break;
     written_total += written;
+    render_frame();
   }
   i2s_zero_dma_buffer(LYLA_SPK_I2S_NUM);
 }
@@ -121,6 +124,7 @@ bool audio_playback_play_sd(const char* path) {
     return false;
   }
   g_busy = true;
+  set_talking_active(true);
   uint8_t chunk[1024];
   while (f.available()) {
     int n = f.read(chunk, sizeof(chunk));
@@ -128,11 +132,58 @@ bool audio_playback_play_sd(const char* path) {
     size_t written = 0;
     i2s_write(LYLA_SPK_I2S_NUM, chunk, (size_t)n, &written,
               pdMS_TO_TICKS(500));
+    render_frame();
   }
   f.close();
   i2s_zero_dma_buffer(LYLA_SPK_I2S_NUM);
+  set_talking_active(false);
+  render_frame();
   g_busy = false;
   return true;
+}
+
+bool audio_playback_play_tone(uint16_t frequency_hz, uint16_t duration_ms) {
+  if (g_busy) return false;
+  if (frequency_hz == 0 || duration_ms == 0) return false;
+  if (!install_i2s_output(LYLA_MIC_SAMPLE_RATE)) return false;
+
+  constexpr size_t kToneChunkSamples = 128;
+  constexpr int16_t kToneAmplitude = 2800;
+  int16_t samples[kToneChunkSamples];
+  uint32_t total_samples = (LYLA_MIC_SAMPLE_RATE * (uint32_t)duration_ms) / 1000UL;
+  uint32_t period_samples = LYLA_MIC_SAMPLE_RATE / (uint32_t)frequency_hz;
+  if (period_samples < 2) period_samples = 2;
+
+  g_busy = true;
+  set_talking_active(true);
+  uint32_t produced = 0;
+  while (produced < total_samples) {
+    size_t n = total_samples - produced;
+    if (n > kToneChunkSamples) n = kToneChunkSamples;
+    for (size_t i = 0; i < n; ++i) {
+      uint32_t phase = (produced + i) % period_samples;
+      samples[i] = (phase < (period_samples / 2)) ? kToneAmplitude : -kToneAmplitude;
+    }
+    size_t written = 0;
+    esp_err_t err = i2s_write(LYLA_SPK_I2S_NUM, samples, n * sizeof(int16_t),
+                              &written, pdMS_TO_TICKS(200));
+    if (err != ESP_OK || written == 0) break;
+    render_frame();
+    produced += (uint32_t)(written / sizeof(int16_t));
+  }
+  i2s_zero_dma_buffer(LYLA_SPK_I2S_NUM);
+  set_talking_active(false);
+  render_frame();
+  g_busy = false;
+  return produced > 0;
+}
+
+bool audio_playback_play_sd_or_tone(const char* path) {
+  if (audio_playback_play_sd(path)) return true;
+  if (path == nullptr || strcmp(path, "/sounds/err_generic.wav") != 0) {
+    if (audio_playback_play_sd("/sounds/err_generic.wav")) return true;
+  }
+  return audio_playback_play_tone(660, 200);
 }
 
 bool audio_playback_play_wav_bytes(const uint8_t* data, size_t len) {
@@ -151,7 +202,10 @@ bool audio_playback_play_wav_bytes(const uint8_t* data, size_t len) {
   }
   if (!install_i2s_output(rate)) return false;
   g_busy = true;
+  set_talking_active(true);
   write_pcm_blocking(data + 44, len - 44);
+  set_talking_active(false);
+  render_frame();
   g_busy = false;
   return true;
 }

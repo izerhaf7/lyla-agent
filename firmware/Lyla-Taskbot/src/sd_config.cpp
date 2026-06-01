@@ -132,7 +132,7 @@ const char* config_load_result_message(const ConfigLoadOutcome& o) {
     case ConfigLoadResult::FileMissing:     return "Config missing";
     case ConfigLoadResult::FileTooLarge:    return "Config too large";
     case ConfigLoadResult::ParseError:      return "Config parse error";
-    case ConfigLoadResult::MissingField:    return "Config error: field";
+    case ConfigLoadResult::MissingField:    return "Config error";
     case ConfigLoadResult::InvalidScheme:   return "Config error: base_url";
     default:                                 return "Config error";
   }

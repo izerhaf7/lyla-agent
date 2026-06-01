@@ -1,6 +1,6 @@
 """Generate English WAV files for the ESP32 SD card.
 
-Synthesizes the ten static device phrases with MiMo (default, BMO voice
+Synthesizes the static device phrases with MiMo (default, BMO voice
 clone) or Gemini. Each phrase is given a BMO emotion via the shared
 ``app.audio.director_map`` so the assets do not sound flat.
 
@@ -42,6 +42,9 @@ PHRASES: dict[str, str] = {
     "ok_summary.wav": "Here is your summary for today.",
     "ok_generic.wav": "Okay, all done.",
     "err_generic.wav": "Oops, something went wrong, please try again.",
+    "act_dizzy.wav": "Whoa-whoa-woooawao!",
+    "tilt_balance.wav": "Wowoowowoww, BMO is balancing!",
+    "tilt_relief.wav": "Huft, all steady now.",
 }
 
 #: Maps each static asset filename to a director_map key so MiMo synthesis
@@ -57,6 +60,9 @@ ASSET_DIRECTOR_KEY: dict[str, str] = {
     "ok_summary.wav": "ok_summary",
     "ok_generic.wav": "ok_generic",
     "err_generic.wav": "err_generic",
+    "act_dizzy.wav": "dizzy",
+    "tilt_balance.wav": "balance",
+    "tilt_relief.wav": "relieved",
 }
 
 

@@ -72,18 +72,17 @@
 // 7. Audio buffer ceilings (Contract §14.1)
 // 30 s record cap = 30 * 16000 samples * 2 bytes = 960000 bytes.
 #define LYLA_MAX_RECORD_MS         30000
-#define LYLA_MIN_RECORD_MS           100
+#define LYLA_MIN_RECORD_MS           300
 #define LYLA_MAX_RECORD_BYTES   (LYLA_MAX_RECORD_MS * (LYLA_MIC_SAMPLE_RATE / 1000) * 2)
 
-// VAD (voice activity detection) for single-tap PTT mode.
-// LYLA_VAD_THRESHOLD: peak amplitude below which a chunk counts as silence
-//   (16-bit PCM, 0..32767). 800 ~= ambient room with quiet voice.
-// LYLA_VAD_SILENCE_MS: contiguous silence duration that auto-stops recording.
-// LYLA_VAD_PRIMING_MS: ignore silence for the first N ms so user has time
-//   to start speaking after pressing the button.
+// Voice activity / silence rejection for held PTT.
+// Peak values are 16-bit PCM amplitude (0..32767). Chunks below the threshold
+// count as silence and are discarded locally instead of being uploaded.
 #define LYLA_VAD_THRESHOLD       800
 #define LYLA_VAD_SILENCE_MS     1500
 #define LYLA_VAD_PRIMING_MS      800
+#define LYLA_SILENCE_REJECT_PEAK LYLA_VAD_THRESHOLD
+#define LYLA_MIN_VOICE_ACTIVE_MS 250
 
 // Set to 0 to disable VAD and record a fixed duration after each tap.
 // Useful for debugging mic capture: a static 10s recording lets you
@@ -115,6 +114,15 @@
 #define LYLA_WIFI_BACKOFF_MAX_MS      30000
 #define LYLA_HEARTBEAT_INTERVAL_MS    60000
 #define LYLA_OFFLINE_NOTICE_MS         2000
+#define LYLA_PTT_COOLDOWN_MS           1800
+#define LYLA_PTT_RATE_WINDOW_MS       60000
+#define LYLA_PTT_RATE_MAX_REQUESTS        3
+#define LYLA_PTT_NOISE_FLAP_THRESHOLD     8
+#define LYLA_PTT_NOISE_LOCKOUT_MS     10000
+#define LYLA_TILT_TRIGGER_DEGREE       18.0f
+#define LYLA_TILT_RECOVER_DEGREE        8.0f
+#define LYLA_TILT_MIN_HOLD_MS           300
+#define LYLA_TILT_COOLDOWN_MS          2500
 
 // 9. Compile-time identity (overridden by platformio.ini build_flags)
 #ifndef LYLA_FIRMWARE_VERSION

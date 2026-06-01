@@ -702,3 +702,61 @@ ADR-13b: when stream-while-playing TTS lands (ADR-6 superseded), the
 because chunked TLS stalls could flush a partial frame.
 
 ---
+
+## ADR-14 - SD/config failure degrades to offline visual mode
+
+### Context
+
+The original Contract halted the firmware when the SD card failed to mount
+or `/sd/config.json` was invalid. That was safe for token/config integrity,
+but it turned a recoverable operator issue into a dead-looking device. The
+user explicitly asked for a safe fallback when both SD-dependent online
+assets/config and internet access are unavailable.
+
+### Decision
+
+SD/config failure now disables only the online tier. The firmware keeps the
+offline Smooth-v5 face, touch, and shake behavior alive. It skips WiFi,
+heartbeat, audio upload, and command polling because all of those require a
+trusted SD config. If the user presses PTT in this state, BMO shows a sad
+notice with the boot error and returns to idle.
+
+Playback fallback also no longer depends solely on SD assets: missing WAVs
+fall back to `err_generic.wav`, and if that is missing or SD is unavailable,
+the firmware emits a short I2S tone when speaker output is available.
+
+### Consequences
+
+- A bad/missing SD card no longer bricks the visible BMO experience.
+- Online security is preserved: no config means no network calls.
+- Operators still need to replace/re-provision the SD card to restore online
+  features.
+
+---
+
+## ADR-15 - PTT spam is blocked locally before upload
+
+### Context
+
+The existing PTT path had majority sampling and debounce, but electrically
+noisy input could still flap repeatedly and short/silent recordings could
+reach the backend if they survived the duration check. This risks noisy UX
+and unnecessary `/agent/audio` traffic.
+
+### Decision
+
+PTT now has three local guards:
+1. Raw flap counting: too many flaps in a 1-second window locks PTT briefly
+   and shows `Tombol tidak stabil`.
+2. Cooldown/rate limit: accepted online recordings are limited locally so
+   repeated presses show `Tunggu sebentar` or `Terlalu sering`.
+3. Silence rejection: captured audio must exceed a peak threshold and a
+   minimum voice-active duration before upload; otherwise BMO shows
+   `Suara tidak terdengar` and discards the buffer.
+
+### Consequences
+
+- Noisy wiring and accidental taps do not spam the backend.
+- The user gets immediate local feedback instead of opaque server errors.
+- Thresholds remain compile-time constants in firmware `config.h` so they can
+  be tuned during hardware QA.
