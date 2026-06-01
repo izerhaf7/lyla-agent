@@ -44,12 +44,6 @@ unsigned long g_btn_last_flap_log_ms = 0;
 unsigned long g_btn_noise_locked_until_ms = 0;
 
 unsigned long g_last_frame_at = 0;
-bool g_tilt_active = false;
-unsigned long g_tilt_candidate_since = 0;
-unsigned long g_last_tilt_done_at = 0;
-float g_tilt_amount = 0.0f;
-bool g_tilt_started_event = false;
-bool g_tilt_relief_event = false;
 
 bool read_touch_stable() {
   bool raw = digitalRead(LYLA_TOUCH_PIN);
@@ -100,50 +94,6 @@ void calibrate_mpu() {
   g_last_az = g_mpu.getAccZ();
   g_shake_filtered = 0.0f;
   g_mpu_ready = true;
-  LYLA_LOG("MPU steady baseline set from boot pose: angleX=%.1f angleY=%.1f; tilt is relative to this pose",
-           g_calib_x, g_calib_y);
-}
-
-float current_tilt_delta() {
-  if (!g_mpu_ready) return 0.0f;
-  float dx = fabsf(g_mpu.getAngleX() - g_calib_x);
-  float dy = fabsf(g_mpu.getAngleY() - g_calib_y);
-  return dx > dy ? dx : dy;
-}
-
-bool update_tilt_state(bool shake_hit, unsigned long now) {
-  if (!g_mpu_ready || shake_hit || lyla::online_is_active()) {
-    if (shake_hit && g_tilt_active) {
-      g_tilt_active = false;
-      g_tilt_relief_event = false;
-    }
-    g_tilt_candidate_since = 0;
-    return g_tilt_active;
-  }
-  float delta = current_tilt_delta();
-  g_tilt_amount = constrain((g_mpu.getAngleX() - g_calib_x) / 45.0f, -1.0f, 1.0f);
-  if (g_tilt_active) {
-    if (delta <= LYLA_TILT_RECOVER_DEGREE) {
-      g_tilt_active = false;
-      g_last_tilt_done_at = now;
-      g_tilt_relief_event = true;
-    }
-    return g_tilt_active;
-  }
-  if (now - g_last_tilt_done_at < LYLA_TILT_COOLDOWN_MS) {
-    g_tilt_candidate_since = 0;
-    return false;
-  }
-  if (delta >= LYLA_TILT_TRIGGER_DEGREE) {
-    if (g_tilt_candidate_since == 0) g_tilt_candidate_since = now;
-    if (now - g_tilt_candidate_since >= LYLA_TILT_MIN_HOLD_MS) {
-      g_tilt_active = true;
-      g_tilt_started_event = true;
-    }
-  } else {
-    g_tilt_candidate_since = 0;
-  }
-  return g_tilt_active;
 }
 
 void halt_with_message(const char* line1, const char* line2) {
@@ -316,29 +266,14 @@ void loop() {
     g_last_shake_at = now;
   }
 
-  bool tilt_now = update_tilt_state(shake_hit, now);
   bool play_dizzy_sound = false;
   if (shake_hit && !lyla::online_is_active()) {
     play_dizzy_sound = true;
-    tilt_now = false;
-  } else if (tilt_now) {
-    shake_hit = false;
   }
 
-  lyla::offline_dispatch_inputs(touched, shake_hit, tilt_now, g_tilt_amount);
+  lyla::offline_dispatch_inputs(touched, shake_hit);
   if (play_dizzy_sound) {
     lyla::audio_playback_play_sd_or_tone("/sounds/act_dizzy.wav");
-  }
-  if (g_tilt_started_event) {
-    g_tilt_started_event = false;
-    if (lyla::offline_is_rotating()) {
-      lyla::audio_playback_play_sd_or_tone("/sounds/tilt_balance.wav");
-    }
-  }
-  if (g_tilt_relief_event) {
-    g_tilt_relief_event = false;
-    lyla::offline_show_tilt_relief();
-    lyla::audio_playback_play_sd_or_tone("/sounds/tilt_relief.wav");
   }
 
   BtnEdge edge = poll_button_edge();

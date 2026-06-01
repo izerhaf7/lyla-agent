@@ -37,11 +37,6 @@ void clear_status_message();
 
 void set_offline_input_suppressed(bool suppressed);
 
-void offline_dispatch_inputs(bool touched, bool shake_detected,
-                             bool tilt_active, float tilt_amount);
-
-void offline_show_tilt_relief();
-
-bool offline_is_rotating();
+void offline_dispatch_inputs(bool touched, bool shake_detected);
 
 }

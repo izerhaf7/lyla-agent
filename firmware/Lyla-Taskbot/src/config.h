@@ -119,11 +119,6 @@
 #define LYLA_PTT_RATE_MAX_REQUESTS        3
 #define LYLA_PTT_NOISE_FLAP_THRESHOLD     8
 #define LYLA_PTT_NOISE_LOCKOUT_MS     10000
-#define LYLA_TILT_TRIGGER_DEGREE       18.0f
-#define LYLA_TILT_RECOVER_DEGREE        8.0f
-#define LYLA_TILT_MIN_HOLD_MS           300
-#define LYLA_TILT_COOLDOWN_MS          2500
-
 // 9. Compile-time identity (overridden by platformio.ini build_flags)
 #ifndef LYLA_FIRMWARE_VERSION
 #define LYLA_FIRMWARE_VERSION "0.1.0"

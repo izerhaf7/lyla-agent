@@ -18,8 +18,6 @@ enum Emotion : uint8_t {
   EMO_DIZZY,
   EMO_ANGRY,
   EMO_ANGRY_IDLE,
-  EMO_ROTATING,
-  EMO_RELIEVED,
   EMO_SERVER_HAPPY,
   EMO_SERVER_SAD,
   EMO_SERVER_THINKING,
@@ -58,7 +56,6 @@ String g_status_text;
 
 bool g_offline_input_suppressed = false;
 bool g_talking_active = false;
-float g_tilt_amount = 0.0f;
 const char* g_last_logged_state = nullptr;
 
 float clamp01(float v) {
@@ -407,35 +404,6 @@ void draw_server_neutral(float alpha) {
   draw_thick_line(140, 158, 180, 158, black, max(1, (int)roundf(5.0f * alpha)));
 }
 
-void draw_rotating_face(float alpha, unsigned long now) {
-  if (!visible(alpha)) return;
-  uint16_t black = alpha_color(C_BLACK, alpha);
-  uint16_t green = alpha_color(C_MOUTH, alpha);
-  uint16_t grey = alpha_color(0xDAD6, alpha);
-  float tilt = constrain(g_tilt_amount, -1.0f, 1.0f);
-  float wobble = sinf((float)now * 0.007f) * 0.08f;
-  int ldx = (int)roundf(tilt * 14.0f);
-  int rdx = (int)roundf(tilt * 14.0f);
-  int ldy = (int)roundf(tilt * 9.0f);
-  int rdy = (int)roundf(tilt * 9.0f);
-  fill_ellipse(83 + ldx, 92 + ldy, 10, 20, black);
-  fill_ellipse(236 + rdx, 92 - rdy, 10, 20, black);
-  draw_thick_line(62 + ldx, 132 + ldy, 88 + ldx, 116 + ldy, black, max(1, (int)roundf(3.0f * alpha)));
-  draw_thick_line(215 + rdx, 70 - rdy, 258 + rdx, 58 - rdy, black, max(1, (int)roundf(3.0f * alpha)));
-
-  int cx = 160;
-  int cy = 152;
-  int liquid = (int)roundf((tilt * 18.0f) + wobble * 22.0f);
-  fill_ellipse(cx, cy + 2, 38, 30, green);
-  g_fb->fillRect(cx - 42, cy - 32, 84, 30 + liquid / 3, C_BG);
-  draw_quadratic(cx - 38, cy - 8 + liquid, cx, cy + 8 - liquid, cx + 38, cy - 8 - liquid,
-                 grey, max(1, (int)roundf(4.0f * alpha)));
-  draw_quadratic(cx - 40, cy - 2, cx, cy + 34, cx + 40, cy - 2,
-                 black, max(1, (int)roundf(4.0f * alpha)));
-  draw_quadratic(cx - 40, cy - 2, cx, cy - 18, cx + 40, cy - 2,
-                 black, max(1, (int)roundf(4.0f * alpha)));
-}
-
 const char* state_label_for(Emotion e) {
   switch (e) {
     case EMO_HAPPY: return "state: idle";
@@ -444,8 +412,6 @@ const char* state_label_for(Emotion e) {
     case EMO_DIZZY: return "state: shaked (dizzy)";
     case EMO_ANGRY: return "state: shaked (angry)";
     case EMO_ANGRY_IDLE: return "state: angry idle";
-    case EMO_ROTATING: return "state: tilted";
-    case EMO_RELIEVED: return "state: relieved";
     case EMO_SERVER_HAPPY: return g_talking_active ? "state: speaking" : "state: response";
     case EMO_SERVER_SAD: return "state: sad";
     case EMO_SERVER_THINKING: return "state: thinking";
@@ -459,16 +425,6 @@ void log_state_if_changed(Emotion e) {
   if (label == g_last_logged_state) return;
   g_last_logged_state = label;
   LYLA_LOG("bmo %s", label);
-}
-
-void draw_relieved_face(float alpha, float bob) {
-  if (!visible(alpha)) return;
-  uint16_t black = alpha_color(C_BLACK, alpha);
-  int b = (int)roundf(bob * 0.25f);
-  draw_quadratic(66, 86 + b, 83, 102 + b, 100, 86 + b, black, max(1, (int)roundf(4.0f * alpha)));
-  draw_quadratic(220, 86 + b, 236, 102 + b, 252, 86 + b, black, max(1, (int)roundf(4.0f * alpha)));
-  draw_cubic(130, 149 + b, 145, 166 + b, 177, 166 + b, 190, 149 + b,
-             black, max(1, (int)roundf(5.0f * alpha)));
 }
 
 }
@@ -521,20 +477,6 @@ void render_emotion_solid(Emotion e, float t, float blink, float breath,
         draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), 0.0f, t);
       } else {
         draw_angry_mouth(1.0f, angry_twitch * 0.35f);
-      }
-      break;
-    case EMO_ROTATING:
-      draw_rotating_face(1.0f, now);
-      if (g_talking_active) {
-        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), 0.0f, t);
-      }
-      break;
-    case EMO_RELIEVED:
-      if (g_talking_active) {
-        draw_satisfied_eyes(1.0f, satisfied_bob);
-        draw_open_bmo_mouth(1.0f, 0.35f + 0.65f * fabsf(sinf(t * 0.0105f)), satisfied_bob, t);
-      } else {
-        draw_relieved_face(1.0f, satisfied_bob);
       }
       break;
     case EMO_SERVER_HAPPY:
@@ -788,23 +730,12 @@ bool can_interrupt_for_shake() {
          g_target == EMO_ANGRY_IDLE;
 }
 
-bool can_interrupt_for_tilt() {
-  return g_target == EMO_HAPPY || g_target == EMO_SATISFIED ||
-         g_target == EMO_SHY || g_target == EMO_ANGRY_IDLE;
-}
-
-void update_state_machine(bool touched, bool shake_hit, bool tilt_active, float tilt_amount) {
+void update_state_machine(bool touched, bool shake_hit) {
   if (g_offline_input_suppressed) return;
   unsigned long now = millis();
-  g_tilt_amount = tilt_amount;
 
   if (touched) {
     g_last_touch_at = now;
-  }
-
-  if (tilt_active && can_interrupt_for_tilt()) {
-    set_emotion(EMO_ROTATING);
-    return;
   }
 
   if (can_interrupt_for_shake() &&
@@ -833,12 +764,6 @@ void update_state_machine(bool touched, bool shake_hit, bool tilt_active, float 
     case EMO_ANGRY:
       if (now - g_emo_started_at >= 2000) set_emotion(EMO_ANGRY_IDLE);
       break;
-    case EMO_ROTATING:
-      if (!tilt_active) set_emotion(EMO_RELIEVED);
-      break;
-    case EMO_RELIEVED:
-      if (now - g_emo_started_at >= 1300) set_emotion(EMO_HAPPY);
-      break;
     default:
       break;
   }
@@ -846,19 +771,8 @@ void update_state_machine(bool touched, bool shake_hit, bool tilt_active, float 
 
 }
 
-void offline_dispatch_inputs(bool touched, bool shake_detected,
-                             bool tilt_active, float tilt_amount) {
-  update_state_machine(touched, shake_detected, tilt_active, tilt_amount);
-}
-
-void offline_show_tilt_relief() {
-  if (!g_offline_input_suppressed && g_target == EMO_ROTATING) {
-    set_emotion(EMO_RELIEVED);
-  }
-}
-
-bool offline_is_rotating() {
-  return !g_offline_input_suppressed && g_target == EMO_ROTATING;
+void offline_dispatch_inputs(bool touched, bool shake_detected) {
+  update_state_machine(touched, shake_detected);
 }
 
 }
