@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Task } from "../lib/types";
+import { Task, TaskPatchInput } from "../lib/types";
 import { formatDateTime, formatStatus } from "../lib/format";
 import * as api from "../lib/api";
 
@@ -26,8 +26,42 @@ const statusClass = (status: string): string => {
 /** Konversi ISO string ke format datetime-local (YYYY-MM-DDTHH:mm) */
 const toDatetimeLocal = (value: string | null | undefined): string => {
   if (!value) return "";
-  // Potong detik & timezone agar cocok dengan input datetime-local
-  return value.slice(0, 16);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part: number) => part.toString().padStart(2, "0");
+  return [
+    date.getFullYear(),
+    "-",
+    pad(date.getMonth() + 1),
+    "-",
+    pad(date.getDate()),
+    "T",
+    pad(date.getHours()),
+    ":",
+    pad(date.getMinutes()),
+  ].join("");
+};
+
+const toIsoOrNull = (value: string): string | null =>
+  value ? new Date(value).toISOString() : null;
+
+const normalizeIsoMinute = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setSeconds(0, 0);
+  return date.toISOString();
+};
+
+const addChangedField = <K extends keyof TaskPatchInput>(
+  patch: TaskPatchInput,
+  key: K,
+  nextValue: TaskPatchInput[K],
+  previousValue: TaskPatchInput[K],
+) => {
+  if (nextValue !== previousValue) {
+    patch[key] = nextValue;
+  }
 };
 
 export function TaskList({ tasks, onUpdate, onDelete }: TaskListProps) {
@@ -100,16 +134,20 @@ export function TaskList({ tasks, onUpdate, onDelete }: TaskListProps) {
     if (busyId) return;
     setBusyId(task.id);
     try {
-      const updated = await api.updateTask(task.id, {
-        title: editForm.title,
-        status: editForm.status,
-        deadline_at: editForm.deadline_at
-          ? new Date(editForm.deadline_at).toISOString()
-          : null,
-        reminder_at: editForm.reminder_at
-          ? new Date(editForm.reminder_at).toISOString()
-          : null,
-      });
+      const patch: TaskPatchInput = {};
+      const nextDeadline = normalizeIsoMinute(toIsoOrNull(editForm.deadline_at));
+      const nextReminder = normalizeIsoMinute(toIsoOrNull(editForm.reminder_at));
+      const currentDeadline = normalizeIsoMinute(task.deadline_at);
+      const currentReminder = normalizeIsoMinute(task.reminder_at);
+
+      addChangedField(patch, "title", editForm.title, task.title);
+      addChangedField(patch, "status", editForm.status, task.status);
+      addChangedField(patch, "deadline_at", nextDeadline, currentDeadline);
+      addChangedField(patch, "reminder_at", nextReminder, currentReminder);
+
+      const updated = Object.keys(patch).length
+        ? await api.updateTask(task.id, patch)
+        : task;
       onUpdate?.(updated);
       setEditingId(null);
       setEditForm({ title: "", status: "pending", deadline_at: "", reminder_at: "" });
