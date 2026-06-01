@@ -18,7 +18,6 @@ const DeviceConfig* g_cfg = nullptr;
 OnlineState g_state = OnlineState::Idle;
 unsigned long g_state_entered_at = 0;
 unsigned long g_record_started_at = 0;
-unsigned long g_record_last_voice_at = 0;
 unsigned long g_last_heartbeat_at = 0;
 
 bool g_button_held = false;
@@ -127,6 +126,25 @@ void send_audio_and_play(uint32_t recording_duration_ms) {
   enter_error(indonesian_for_status(res.http_status));
 }
 
+void finish_recording(const char* reason) {
+  unsigned long t = millis();
+  uint32_t dur = (t >= g_record_started_at) ? (uint32_t)(t - g_record_started_at) : 0;
+  audio_capture_stop();
+  g_button_held = false;
+  if (audio_capture_size_bytes() > 0 && dur >= LYLA_MIN_RECORD_MS) {
+    LYLA_LOG("PTT release stop (%s) after %ums (%u bytes)",
+             reason, (unsigned)dur, (unsigned)audio_capture_size_bytes());
+    transition(OnlineState::Sending);
+    send_audio_and_play(dur);
+  } else {
+    LYLA_WARN("recording too short (%ums); discard (%s)",
+              (unsigned)dur, reason);
+    audio_capture_release();
+    clear_server_face_override();
+    transition(OnlineState::Idle);
+  }
+}
+
 }
 
 void online_init(const DeviceConfig& cfg) {
@@ -148,12 +166,11 @@ void online_on_button_pressed() {
     enter_error("Audio init error");
     return;
   }
-  LYLA_LOG("PTT tap; recording until silence (max %ums)...",
+  LYLA_LOG("PTT press; recording while held (max %ums)...",
            (unsigned)LYLA_MAX_RECORD_MS);
   audio_capture_start();
   unsigned long now = millis();
   g_record_started_at = now;
-  g_record_last_voice_at = now;
   g_button_held = true;
   set_server_face_override(ServerFace::Thinking, String("Mendengarkan..."));
   transition(OnlineState::Recording);
@@ -161,6 +178,9 @@ void online_on_button_pressed() {
 
 void online_on_button_released() {
   g_button_held = false;
+  if (g_state == OnlineState::Recording) {
+    finish_recording("button released");
+  }
 }
 
 void online_loop(unsigned long now) {
@@ -200,51 +220,14 @@ void online_loop(unsigned long now) {
       if (t < g_record_started_at) break;
       uint32_t dur = (uint32_t)(t - g_record_started_at);
 
-      uint16_t peak = audio_capture_last_peak();
-      bool in_priming = (dur < LYLA_VAD_PRIMING_MS);
-      if (in_priming || peak >= LYLA_VAD_THRESHOLD) {
-        g_record_last_voice_at = t;
-      }
-
-      bool finish = false;
-      const char* finish_reason = nullptr;
-
+      // True push-to-talk: the user controls the recording window by
+      // holding the button; release (online_on_button_released) is the
+      // normal stop. These are only safety caps so a stuck button or a
+      // very long hold cannot overflow the PSRAM buffer.
       if (!ok) {
-        finish = true;
-        finish_reason = "buffer full";
+        finish_recording("buffer full");
       } else if (dur >= LYLA_MAX_RECORD_MS) {
-        finish = true;
-        finish_reason = "max duration";
-      }
-#if LYLA_VAD_ENABLED
-      else if (!in_priming &&
-                 t - g_record_last_voice_at >= LYLA_VAD_SILENCE_MS) {
-        finish = true;
-        finish_reason = "silence";
-      }
-#else
-      else if (dur >= LYLA_FIXED_RECORD_MS) {
-        finish = true;
-        finish_reason = "fixed duration";
-      }
-#endif
-
-      if (finish) {
-        audio_capture_stop();
-        g_button_held = false;
-        if (audio_capture_size_bytes() > 0 && dur >= LYLA_MIN_RECORD_MS) {
-          LYLA_LOG("VAD stop (%s) after %ums (%u bytes)",
-                   finish_reason, (unsigned)dur,
-                   (unsigned)audio_capture_size_bytes());
-          transition(OnlineState::Sending);
-          send_audio_and_play(dur);
-        } else {
-          LYLA_WARN("recording too short (%ums); discard (%s)",
-                    (unsigned)dur, finish_reason);
-          audio_capture_release();
-          clear_server_face_override();
-          transition(OnlineState::Idle);
-        }
+        finish_recording("max duration");
       }
       break;
     }
