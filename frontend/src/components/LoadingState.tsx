@@ -5,12 +5,16 @@ interface LoadingStateProps {
 export function LoadingState({ label = "Memuat data…" }: LoadingStateProps) {
   return (
     <div
-      className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm"
+      className="flex items-center gap-3 rounded-lg border border-bmo-border bg-surface-elev p-4 text-sm text-slate-600"
       role="status"
       aria-live="polite"
     >
-      <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-slate-400" />
-      <span className="animate-pulse">{label}</span>
+      <span className="flex items-center gap-1" aria-hidden="true">
+        <span className="h-2 w-2 animate-bounce rounded-full bg-bmo-mouth [animation-delay:-0.3s]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-bmo-blue [animation-delay:-0.15s]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-bmo-red" />
+      </span>
+      <span>{label}</span>
     </div>
   );
 }
