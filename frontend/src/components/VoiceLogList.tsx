@@ -1,20 +1,30 @@
 import { VoiceCommandLog } from "../lib/types";
 import { formatDateTime, formatStatus } from "../lib/format";
+import { BmoBadge } from "./bmo/BmoBadge";
+import { BmoFace, BmoExpression } from "./bmo/BmoFace";
 
 interface VoiceLogListProps {
   logs: VoiceCommandLog[];
 }
 
-const statusClass = (status: string): string => {
-  if (status === "success") return "bg-emerald-100 text-emerald-800";
-  if (status === "error") return "bg-red-100 text-red-800";
-  return "bg-slate-200 text-slate-700";
+type Tone = "success" | "error" | "idle";
+
+const statusTone = (status: string): Tone => {
+  if (status === "success") return "success";
+  if (status === "error") return "error";
+  return "idle";
+};
+
+const FACE_BY_TONE: Record<Tone, BmoExpression> = {
+  success: "happy",
+  error: "sad",
+  idle: "idle",
 };
 
 export function VoiceLogList({ logs }: VoiceLogListProps) {
   if (logs.length === 0) {
     return (
-      <p className="rounded border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
+      <p className="rounded-lg border border-dashed border-bmo-border bg-surface-elev p-4 text-sm text-slate-600">
         Belum ada riwayat perintah.
       </p>
     );
@@ -22,46 +32,49 @@ export function VoiceLogList({ logs }: VoiceLogListProps) {
 
   return (
     <ul className="space-y-2">
-      {logs.map((log) => (
-        <li
-          key={log.id}
-          className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="text-xs text-slate-500">
-                {formatDateTime(log.created_at)}
-              </div>
-              <p className="mt-1 break-words text-sm font-medium text-slate-900">
-                {log.input_text}
-              </p>
-              {log.response_text ? (
-                <p className="mt-1 line-clamp-2 break-words text-sm text-slate-700">
-                  {log.response_text}
+      {logs.map((log) => {
+        const tone = statusTone(log.status);
+        return (
+          <li
+            key={log.id}
+            className="rounded-lg border border-bmo-border bg-surface-elev p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-bmo"
+          >
+            <div className="flex items-start gap-3">
+              <BmoFace
+                expression={FACE_BY_TONE[tone]}
+                size={40}
+                className="mt-0.5 shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs text-slate-600">
+                    {formatDateTime(log.created_at)}
+                  </div>
+                  <BmoBadge tone={tone}>{formatStatus(log.status)}</BmoBadge>
+                </div>
+                <p className="mt-1 break-words text-sm font-medium text-bmo-dark">
+                  {log.input_text}
                 </p>
-              ) : null}
+                {log.response_text ? (
+                  <p className="mt-1 line-clamp-2 break-words text-sm text-slate-600">
+                    {log.response_text}
+                  </p>
+                ) : null}
+                {log.parsed_actions && log.parsed_actions.length > 0 ? (
+                  <details className="mt-2">
+                    <summary className="text-xs text-slate-600 hover:text-bmo-dark">
+                      {log.parsed_actions.length} aksi
+                    </summary>
+                    <pre className="mt-1 overflow-x-auto rounded-md bg-bmo-screen/40 p-2 font-mono text-xs text-bmo-dark">
+                      {JSON.stringify(log.parsed_actions, null, 2)}
+                    </pre>
+                  </details>
+                ) : null}
+              </div>
             </div>
-            <span
-              className={[
-                "rounded-full px-2 py-0.5 text-xs font-medium",
-                statusClass(log.status),
-              ].join(" ")}
-            >
-              {formatStatus(log.status)}
-            </span>
-          </div>
-          {log.parsed_actions && log.parsed_actions.length > 0 ? (
-            <details className="mt-2">
-              <summary className="text-xs text-slate-500 hover:text-slate-700">
-                {log.parsed_actions.length} aksi
-              </summary>
-              <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2 text-xs text-slate-700">
-                {JSON.stringify(log.parsed_actions, null, 2)}
-              </pre>
-            </details>
-          ) : null}
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }

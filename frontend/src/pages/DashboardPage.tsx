@@ -16,6 +16,39 @@ import { VoiceLogList } from "../components/VoiceLogList";
 import { EmptyState } from "../components/EmptyState";
 import { formatCurrencyIDR } from "../lib/format";
 
+const ICONS = {
+  task: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  ),
+  clock: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  ),
+  money: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="12" y1="1" x2="12" y2="23" />
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    </svg>
+  ),
+  calendar: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  ),
+  device: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="6" y="2" width="12" height="20" rx="2" />
+      <line x1="10" y1="18" x2="14" y2="18" />
+    </svg>
+  ),
+} as const;
+
 interface Snapshot {
   summary: DashboardSummary;
   pendingTasks: Task[];
@@ -102,23 +135,28 @@ export function DashboardPage() {
               label="Tugas pending"
               value={data.pendingTasks.length}
               tone={data.pendingTasks.length > 0 ? "warn" : "good"}
+              icon={ICONS.task}
             />
             <StatCard
               label="Jatuh tempo hari ini"
               value={data.summary.tasks_due_today}
               tone={data.summary.tasks_due_today > 0 ? "warn" : "neutral"}
+              icon={ICONS.clock}
             />
             <StatCard
               label="Pengeluaran hari ini"
               value={formatCurrencyIDR(data.summary.total_expenses_today)}
+              icon={ICONS.money}
             />
             <StatCard
               label="Pengeluaran bulan ini"
               value={formatCurrencyIDR(monthExpenses)}
+              icon={ICONS.calendar}
             />
             <StatCard
               label="Devices terdaftar"
               value={data.devices.length}
+              icon={ICONS.device}
             />
           </div>
 
