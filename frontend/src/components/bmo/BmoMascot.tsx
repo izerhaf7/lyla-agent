@@ -1,5 +1,5 @@
 interface BmoMascotProps {
-  size?: 28 | 48 | 80;
+  size?: 28 | 48 | 80 | 160;
   className?: string;
 }
 
@@ -45,6 +45,23 @@ const SIZE_CONFIG = {
     gbtn: { left: 58, top: 64, width: 10, height: 10 },
     bb1: { left: 7, top: 88, width: 18, height: 6 },
     bb2: { left: 29, top: 88, width: 18, height: 6 },
+    showShadow: true,
+    showMouth: true,
+    showPlus: true,
+    showGbtn: true,
+  },
+  160: {
+    body: { width: 160, height: 224, radius: 12 },
+    face: { left: 16, top: 14, width: 128, height: 76, radius: 8 },
+    eye: { width: 14, height: 18, top: 20, leftL: 32, leftR: 82 },
+    mouth: { left: 38, top: 46, width: 52, height: 24 },
+    disc: { left: 14, top: 104, width: 100, height: 8 },
+    plusV: { left: 22, top: 128, width: 12, height: 36 },
+    plusH: { left: 10, top: 140, width: 36, height: 12 },
+    rbtn: { left: 88, top: 128, width: 24, height: 24 },
+    gbtn: { left: 116, top: 128, width: 20, height: 20 },
+    bb1: { left: 14, top: 176, width: 36, height: 12 },
+    bb2: { left: 58, top: 176, width: 36, height: 12 },
     showShadow: true,
     showMouth: true,
     showPlus: true,
