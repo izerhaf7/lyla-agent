@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ApiError, Expense } from "../lib/types";
 import * as api from "../lib/api";
 import { isReady } from "../lib/env";
@@ -8,6 +8,9 @@ import { ExpenseList } from "../components/ExpenseList";
 import { EmptyState } from "../components/EmptyState";
 import { BmoButton } from "../components/bmo/BmoButton";
 import { BmoInput } from "../components/bmo/BmoInput";
+import { formatCurrencyIDR } from "../lib/format";
+
+const currentMonth = (): string => new Date().toISOString().slice(0, 7);
 
 export function ExpensesPage() {
   const ready = isReady();
@@ -25,12 +28,17 @@ export function ExpensesPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonth());
 
   const load = async (uid: string) => {
     setLoading(true);
     setError(null);
     try {
-      setExpenses(await api.getExpenses(uid));
+      const data = await api.getExpenses(uid);
+      const sorted = [...data].sort(
+        (a, b) => new Date(b.spent_at).getTime() - new Date(a.spent_at).getTime(),
+      );
+      setExpenses(sorted);
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
@@ -41,6 +49,24 @@ export function ExpensesPage() {
   useEffect(() => {
     if (userId) void load(userId);
   }, [userId]);
+
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    for (const e of expenses) {
+      months.add(e.spent_at.slice(0, 7));
+    }
+    return [...months].sort().reverse();
+  }, [expenses]);
+
+  const filteredExpenses = useMemo(() => {
+    if (!selectedMonth) return expenses;
+    return expenses.filter((e) => e.spent_at.startsWith(selectedMonth));
+  }, [expenses, selectedMonth]);
+
+  const monthlyTotal = useMemo(
+    () => filteredExpenses.reduce((sum, e) => sum + e.amount, 0),
+    [filteredExpenses],
+  );
 
   const resetForm = () => {
     setAmount("");
@@ -70,9 +96,12 @@ export function ExpensesPage() {
           note: note.trim() || undefined,
           spent_at: spentAt ? new Date(spentAt).toISOString() : undefined,
         });
-        setExpenses((prev) =>
-          prev.map((e) => (e.id === editingId ? updated : e)),
-        );
+        setExpenses((prev) => {
+          const next = prev.map((e) => (e.id === editingId ? updated : e));
+          return [...next].sort(
+            (a, b) => new Date(b.spent_at).getTime() - new Date(a.spent_at).getTime(),
+          );
+        });
       } else {
         const created = await api.createExpense({
           user_id: userId,
@@ -82,6 +111,7 @@ export function ExpensesPage() {
           spent_at: spentAt ? new Date(spentAt).toISOString() : null,
         });
         setExpenses((prev) => [created, ...prev]);
+        setSelectedMonth(created.spent_at.slice(0, 7));
       }
       resetForm();
     } catch (err) {
@@ -192,20 +222,70 @@ export function ExpensesPage() {
         ) : null}
       </form>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium text-bmo-dark">Bulan:</span>
+        <button
+          type="button"
+          onClick={() => setSelectedMonth("")}
+          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            selectedMonth === ""
+              ? "bg-bmo-mouth text-white"
+              : "bg-surface-elev text-bmo-dark hover:bg-bmo-body/10"
+          }`}
+        >
+          Semua
+        </button>
+        {availableMonths.map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setSelectedMonth(m)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              selectedMonth === m
+                ? "bg-bmo-mouth text-white"
+                : "bg-surface-elev text-bmo-dark hover:bg-bmo-body/10"
+            }`}
+          >
+            {new Date(m + "-01").toLocaleDateString("id-ID", {
+              month: "short",
+              year: "numeric",
+            })}
+          </button>
+        ))}
+      </div>
+
+      {filteredExpenses.length > 0 ? (
+        <div className="rounded-lg border border-bmo-border bg-surface-elev p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-bmo-dark">
+              {selectedMonth
+                ? `Total ${new Date(selectedMonth + "-01").toLocaleDateString("id-ID", { month: "long", year: "numeric" })}`
+                : "Total Semua"}
+            </span>
+            <span className="text-lg font-semibold text-bmo-mouth">
+              {formatCurrencyIDR(monthlyTotal)}
+            </span>
+          </div>
+          <span className="text-xs text-slate-500">
+            {filteredExpenses.length} transaksi
+          </span>
+        </div>
+      ) : null}
+
       {loading ? <LoadingState /> : null}
       {error ? (
         <ErrorState error={error} onRetry={() => userId && load(userId)} />
       ) : null}
       {!loading && !error ? (
-        expenses.length === 0 ? (
+        filteredExpenses.length === 0 ? (
           <EmptyState
             face="idle"
-            title="Belum ada pengeluaran"
+            title={selectedMonth ? "Tidak ada pengeluaran di bulan ini" : "Belum ada pengeluaran"}
             description="Coba: catat makan siang 25000"
           />
         ) : (
           <ExpenseList
-            expenses={expenses}
+            expenses={filteredExpenses}
             onEdit={handleEdit}
             onDelete={(id) => void handleDelete(id)}
           />
