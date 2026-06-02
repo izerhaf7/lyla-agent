@@ -35,6 +35,20 @@ export default {
       },
       boxShadow: {
         bmo: "-2px 2px 0 2px #639975",
+        "bmo-lg": "-4px 4px 0 4px #639975",
+      },
+      keyframes: {
+        "bmo-float": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
+      },
+      animation: {
+        "bmo-float": "bmo-float 3s ease-in-out infinite",
+      },
+      backgroundImage: {
+        "bmo-pixel":
+          "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(28,75,59,0.04) 3px, rgba(28,75,59,0.04) 4px), repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(28,75,59,0.04) 3px, rgba(28,75,59,0.04) 4px)",
       },
     },
   },

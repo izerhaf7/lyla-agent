@@ -4,16 +4,29 @@ interface FeatureCardProps {
   icon: ReactNode;
   title: string;
   description: string;
+  accent?: string;
 }
 
-export function FeatureCard({ icon, title, description }: FeatureCardProps) {
+export function FeatureCard({
+  icon,
+  title,
+  description,
+  accent = "#1C4B3B",
+}: FeatureCardProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-bmo-border bg-surface-elev p-6 transition-shadow duration-200 hover:shadow-md">
-      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-bmo-screen text-bmo-dark">
-        {icon}
+    <div className="group flex flex-col gap-3 overflow-hidden rounded-[1.35rem] border-2 border-bmo-dark/15 bg-[#eaf9d9] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_0_0_rgba(28,75,59,0.12)]">
+      <div className="h-2" style={{ background: accent }} aria-hidden="true" />
+      <div className="px-5 pb-5 pt-2">
+        <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] border-2 border-bmo-dark/15 bg-white/65 text-bmo-dark shadow-[0_4px_0_0_rgba(28,75,59,0.08)]">
+          {icon}
+        </div>
+        <h3 className="mt-4 text-[1.35rem] font-black tracking-[-0.04em] text-bmo-dark">
+          {title}
+        </h3>
+        <p className="mt-2 text-sm leading-relaxed text-bmo-dark/75">
+          {description}
+        </p>
       </div>
-      <h3 className="text-lg font-medium text-bmo-dark">{title}</h3>
-      <p className="text-sm leading-relaxed text-slate-600">{description}</p>
     </div>
   );
 }

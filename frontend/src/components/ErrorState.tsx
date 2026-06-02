@@ -1,4 +1,6 @@
 import { ApiError } from "../lib/types";
+import { BmoFace } from "./bmo/BmoFace";
+import { BmoButton } from "./bmo/BmoButton";
 
 interface ErrorStateProps {
   error: Error | ApiError;
@@ -12,32 +14,38 @@ export function ErrorState({ error, onRetry }: ErrorStateProps) {
   return (
     <div
       role="alert"
-      className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm"
+      className="flex items-start gap-4 rounded-lg border border-bmo-red/40 bg-red-50 p-4 text-sm text-bmo-red"
     >
-      <div className="font-semibold">
-        {isNetwork ? "Backend tidak dapat dihubungi" : "Terjadi kesalahan"}
-        {status != null && status > 0 ? (
-          <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs font-normal text-red-700">
-            HTTP {status}
-          </span>
+      <BmoFace expression="sad" size={72} className="shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 font-semibold text-bmo-dark">
+          {isNetwork ? "Backend tidak dapat dihubungi" : "Terjadi kesalahan"}
+          {status != null && status > 0 ? (
+            <span className="rounded-full bg-bmo-red/15 px-2 py-0.5 text-xs font-medium text-bmo-red">
+              HTTP {status}
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-1 whitespace-pre-wrap text-bmo-red/90">
+          {error.message}
+        </p>
+        {isNetwork ? (
+          <p className="mt-2 text-xs text-bmo-red/80">
+            Pastikan FastAPI berjalan dan <code className="font-mono">VITE_API_BASE_URL</code>{" "}
+            sesuai dengan port backend.
+          </p>
+        ) : null}
+        {onRetry ? (
+          <BmoButton
+            variant="destructive"
+            size="sm"
+            onClick={onRetry}
+            className="mt-3"
+          >
+            Coba lagi
+          </BmoButton>
         ) : null}
       </div>
-      <p className="mt-1 whitespace-pre-wrap">{error.message}</p>
-      {isNetwork ? (
-        <p className="mt-2 text-xs text-red-700">
-          Pastikan FastAPI berjalan dan <code>VITE_API_BASE_URL</code> sesuai
-          dengan port backend.
-        </p>
-      ) : null}
-      {onRetry ? (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-3 rounded border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
-        >
-          Coba lagi
-        </button>
-      ) : null}
     </div>
   );
 }
