@@ -35,7 +35,7 @@ import app.models  # noqa: F401
 from app.models.expense import Expense
 from app.models.user import User
 from app.services import expense_service
-from app.services.exceptions import NotFoundError, ValidationError
+from app.services.exceptions import NotFoundError, PermissionDeniedError, ValidationError
 
 
 # ── helpers ─────────────────────────────────────────────────────────
@@ -465,3 +465,93 @@ def test_get_expense_summary_basic(db_session):
     # filters; consistent with ``list_expenses``).
     empty = expense_service.get_expense_summary(db_session, user_id="missing")
     assert empty == {"total": 0, "count": 0}
+
+
+def test_get_expense_returns_single_expense(db_session):
+    user = User(name="Get", email=f"get-{uuid.uuid4().hex}@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    created = expense_service.create_expense(
+        db_session, user_id=user.id, amount=25_000, category="transport", note="grab"
+    )
+    fetched = expense_service.get_expense(db_session, user_id=user.id, expense_id=created.id)
+    assert fetched.id == created.id
+    assert fetched.amount == 25_000
+    assert fetched.category == "transport"
+
+
+def test_get_expense_not_found(db_session):
+    user = User(name="GNF", email=f"gnf-{uuid.uuid4().hex}@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    with pytest.raises(NotFoundError):
+        expense_service.get_expense(db_session, user_id=user.id, expense_id="missing")
+
+
+def test_get_expense_wrong_user(db_session):
+    user1 = User(name="U1", email=f"u1-{uuid.uuid4().hex}@example.com")
+    user2 = User(name="U2", email=f"u2-{uuid.uuid4().hex}@example.com")
+    db_session.add_all([user1, user2])
+    db_session.commit()
+    db_session.refresh(user1)
+    db_session.refresh(user2)
+
+    exp = expense_service.create_expense(db_session, user_id=user1.id, amount=10_000)
+    with pytest.raises(PermissionDeniedError):
+        expense_service.get_expense(db_session, user_id=user2.id, expense_id=exp.id)
+
+
+def test_update_expense_changes_fields(db_session):
+    user = User(name="Upd", email=f"upd-{uuid.uuid4().hex}@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    exp = expense_service.create_expense(
+        db_session, user_id=user.id, amount=10_000, category="lama"
+    )
+    updated = expense_service.update_expense(
+        db_session, user_id=user.id, expense_id=exp.id, amount=20_000, category="baru"
+    )
+    assert updated.amount == 20_000
+    assert updated.category == "baru"
+
+
+def test_update_expense_validates_amount(db_session):
+    user = User(name="UV", email=f"uv-{uuid.uuid4().hex}@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    exp = expense_service.create_expense(db_session, user_id=user.id, amount=10_000)
+    with pytest.raises(ValidationError):
+        expense_service.update_expense(db_session, user_id=user.id, expense_id=exp.id, amount=-5)
+
+
+def test_delete_expense_removes_row(db_session):
+    user = User(name="Del", email=f"del-{uuid.uuid4().hex}@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    exp = expense_service.create_expense(db_session, user_id=user.id, amount=10_000)
+    expense_service.delete_expense(db_session, user_id=user.id, expense_id=exp.id)
+    with pytest.raises(NotFoundError):
+        expense_service.get_expense(db_session, user_id=user.id, expense_id=exp.id)
+
+
+def test_delete_expense_wrong_user(db_session):
+    user1 = User(name="D1", email=f"d1-{uuid.uuid4().hex}@example.com")
+    user2 = User(name="D2", email=f"d2-{uuid.uuid4().hex}@example.com")
+    db_session.add_all([user1, user2])
+    db_session.commit()
+    db_session.refresh(user1)
+    db_session.refresh(user2)
+
+    exp = expense_service.create_expense(db_session, user_id=user1.id, amount=10_000)
+    with pytest.raises(PermissionDeniedError):
+        expense_service.delete_expense(db_session, user_id=user2.id, expense_id=exp.id)

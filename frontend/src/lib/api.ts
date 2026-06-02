@@ -13,6 +13,7 @@ import {
   DeviceUpdateRequest,
   Expense,
   ExpenseCreateInput,
+  ExpensePatchInput,
   LoginRequest,
   MeResponse,
   RecentLogSummary,
@@ -130,6 +131,14 @@ export const deleteTask = (taskId: string): Promise<void> =>
 export const getExpenses = (userId: string): Promise<Expense[]> =>
   request<Expense[]>(`/dashboard/expenses${qs({ user_id: userId })}`);
 
+export const getExpense = (
+  expenseId: string,
+  userId: string,
+): Promise<Expense> =>
+  request<Expense>(
+    `/dashboard/expenses/${encodeURIComponent(expenseId)}${qs({ user_id: userId })}`,
+  );
+
 export const createExpense = (
   input: ExpenseCreateInput,
 ): Promise<Expense> =>
@@ -137,6 +146,27 @@ export const createExpense = (
     method: "POST",
     body: JSON.stringify(input),
   });
+
+export const updateExpense = (
+  expenseId: string,
+  input: ExpensePatchInput,
+): Promise<Expense> =>
+  request<Expense>(
+    `/dashboard/expenses/${encodeURIComponent(expenseId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  );
+
+export const deleteExpense = (
+  expenseId: string,
+  userId: string,
+): Promise<void> =>
+  request<void>(
+    `/dashboard/expenses/${encodeURIComponent(expenseId)}${qs({ user_id: userId })}`,
+    { method: "DELETE" },
+  );
 
 export const getLogs = (userId: string): Promise<VoiceCommandLog[]> =>
   request<VoiceCommandLog[]>(`/dashboard/logs${qs({ user_id: userId })}`);

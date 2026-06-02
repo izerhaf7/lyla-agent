@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.models.expense import Expense
 from app.models.user import User
-from app.services.exceptions import NotFoundError, ValidationError
+from app.services.exceptions import NotFoundError, PermissionDeniedError, ValidationError
 from app.utils.timezone import now_utc
 
 
@@ -94,6 +94,86 @@ def list_expenses(
     if end_at is not None:
         query = query.filter(Expense.spent_at <= end_at)
     return query.all()
+
+
+def get_expense(db: Session, user_id: str, expense_id: str) -> Expense:
+    """Return a single expense by id.
+
+    Raises ``NotFoundError`` if the expense does not exist, or
+    ``PermissionDeniedError`` if it belongs to another user.
+    """
+    expense = db.query(Expense).filter(Expense.id == expense_id).one_or_none()
+    if expense is None:
+        raise NotFoundError(f"Expense {expense_id!r} not found")
+    if expense.user_id != user_id:
+        raise PermissionDeniedError(
+            f"Expense {expense_id!r} does not belong to user {user_id!r}"
+        )
+    return expense
+
+
+_UPDATABLE_EXPENSE_FIELDS = frozenset({"amount", "category", "note", "spent_at"})
+
+
+def update_expense(db: Session, user_id: str, expense_id: str, **patch) -> Expense:
+    """Apply a partial update to an expense row.
+
+    Only fields with non-``None`` values are applied; keys outside
+    :data:`_UPDATABLE_EXPENSE_FIELDS` are silently ignored.
+
+    Raises ``NotFoundError`` if the expense does not exist,
+    ``PermissionDeniedError`` if it belongs to another user, or
+    ``ValidationError`` when input fails validation.
+    """
+    expense = db.query(Expense).filter(Expense.id == expense_id).one_or_none()
+    if expense is None:
+        raise NotFoundError(f"Expense {expense_id!r} not found")
+    if expense.user_id != user_id:
+        raise PermissionDeniedError(
+            f"Expense {expense_id!r} does not belong to user {user_id!r}"
+        )
+
+    effective = {
+        key: value
+        for key, value in patch.items()
+        if key in _UPDATABLE_EXPENSE_FIELDS and value is not None
+    }
+
+    if "amount" in effective:
+        amount = effective["amount"]
+        if isinstance(amount, bool) or not isinstance(amount, int):
+            raise ValidationError("amount must be a positive int")
+        if amount <= 0:
+            raise ValidationError("amount must be a positive int")
+
+    if "spent_at" in effective:
+        spent_at = effective["spent_at"]
+        if not isinstance(spent_at, datetime) or not _is_aware(spent_at):
+            raise ValidationError("spent_at must be a timezone-aware datetime")
+
+    for key, value in effective.items():
+        setattr(expense, key, value)
+
+    db.commit()
+    db.refresh(expense)
+    return expense
+
+
+def delete_expense(db: Session, user_id: str, expense_id: str) -> None:
+    """Delete an expense by id.
+
+    Raises ``NotFoundError`` if the expense does not exist, or
+    ``PermissionDeniedError`` if it belongs to another user.
+    """
+    expense = db.query(Expense).filter(Expense.id == expense_id).one_or_none()
+    if expense is None:
+        raise NotFoundError(f"Expense {expense_id!r} not found")
+    if expense.user_id != user_id:
+        raise PermissionDeniedError(
+            f"Expense {expense_id!r} does not belong to user {user_id!r}"
+        )
+    db.delete(expense)
+    db.commit()
 
 
 def get_expense_summary(

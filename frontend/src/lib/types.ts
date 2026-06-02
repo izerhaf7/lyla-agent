@@ -65,6 +65,10 @@ export interface ExpenseCreateInput {
   spent_at?: string | null;
 }
 
+export type ExpensePatchInput = {
+  user_id: string;
+} & Partial<Pick<Expense, "amount" | "category" | "note" | "spent_at">>;
+
 export interface VoiceCommandLog {
   id: string;
   user_id: string | null;

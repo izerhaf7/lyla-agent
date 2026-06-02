@@ -60,6 +60,7 @@ from app.schemas.dashboard import (
     DeviceOut,
     ExpenseIn,
     ExpenseOut,
+    ExpensePatch,
     LogOut,
     SummaryOut,
     TaskOut,
@@ -294,6 +295,61 @@ def create_expense(
     except (NotFoundError, ValidationError, PermissionDeniedError) as exc:
         raise _map_service_exceptions(exc)
     return ExpenseOut.model_validate(expense)
+
+
+@router.get(
+    "/dashboard/expenses/{expense_id}",
+    response_model=ExpenseOut,
+    dependencies=[Depends(require_dashboard_auth)],
+)
+def get_expense(
+    expense_id: str,
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+) -> ExpenseOut:
+    _ensure_user_exists(db, user_id)
+    try:
+        expense = expense_service.get_expense(db, user_id, expense_id)
+    except (NotFoundError, ValidationError, PermissionDeniedError) as exc:
+        raise _map_service_exceptions(exc)
+    return ExpenseOut.model_validate(expense)
+
+
+@router.patch(
+    "/dashboard/expenses/{expense_id}",
+    response_model=ExpenseOut,
+    dependencies=[Depends(require_dashboard_auth)],
+)
+def patch_expense(
+    expense_id: str,
+    patch: ExpensePatch,
+    db: Session = Depends(get_db),
+) -> ExpenseOut:
+    _ensure_user_exists(db, patch.user_id)
+    fields = patch.model_dump(exclude_unset=True, exclude={"user_id"})
+    try:
+        expense = expense_service.update_expense(db, patch.user_id, expense_id, **fields)
+    except (NotFoundError, ValidationError, PermissionDeniedError) as exc:
+        raise _map_service_exceptions(exc)
+    return ExpenseOut.model_validate(expense)
+
+
+@router.delete(
+    "/dashboard/expenses/{expense_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_dashboard_auth)],
+)
+def delete_expense(
+    expense_id: str,
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+) -> Response:
+    _ensure_user_exists(db, user_id)
+    try:
+        expense_service.delete_expense(db, user_id, expense_id)
+    except (NotFoundError, ValidationError, PermissionDeniedError) as exc:
+        raise _map_service_exceptions(exc)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # --------------------------------------------------------------------------- #

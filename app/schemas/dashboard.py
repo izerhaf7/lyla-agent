@@ -75,12 +75,26 @@ class ExpenseIn(BaseModel):
 
     Mirrors the keyword arguments of ``expense_service.create_expense``
     per Requirement 13.2. Service-layer validation (positive integer
-    amount, timezone-aware ``spent_at``) is re-applied downstream and
+    ``amount``, timezone-aware ``spent_at``) is re-applied downstream and
     surfaced as HTTP 422 by the dashboard error handler.
     """
 
     user_id: str
     amount: int
+    category: Optional[str] = None
+    note: Optional[str] = None
+    spent_at: Optional[datetime] = None
+
+
+class ExpensePatch(BaseModel):
+    """Partial update payload for ``PATCH /dashboard/expenses/{expense_id}``.
+
+    Every field is optional; only the supplied (non-``None``) fields are
+    applied by ``expense_service.update_expense``.
+    """
+
+    user_id: str
+    amount: Optional[int] = None
     category: Optional[str] = None
     note: Optional[str] = None
     spent_at: Optional[datetime] = None

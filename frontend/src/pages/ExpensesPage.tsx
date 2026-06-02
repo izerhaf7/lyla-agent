@@ -24,6 +24,8 @@ export function ExpensesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   const load = async (uid: string) => {
     setLoading(true);
     setError(null);
@@ -40,6 +42,15 @@ export function ExpensesPage() {
     if (userId) void load(userId);
   }, [userId]);
 
+  const resetForm = () => {
+    setAmount("");
+    setCategory("");
+    setNote("");
+    setSpentAt("");
+    setEditingId(null);
+    setFormError(null);
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!userId) return;
@@ -51,24 +62,52 @@ export function ExpensesPage() {
     setSubmitting(true);
     setFormError(null);
     try {
-      const created = await api.createExpense({
-        user_id: userId,
-        amount: amountNum,
-        category: category.trim() || null,
-        note: note.trim() || null,
-        spent_at: spentAt ? new Date(spentAt).toISOString() : null,
-      });
-      setExpenses((prev) => [created, ...prev]);
-      setAmount("");
-      setCategory("");
-      setNote("");
-      setSpentAt("");
+      if (editingId) {
+        const updated = await api.updateExpense(editingId, {
+          user_id: userId,
+          amount: amountNum,
+          category: category.trim() || undefined,
+          note: note.trim() || undefined,
+          spent_at: spentAt ? new Date(spentAt).toISOString() : undefined,
+        });
+        setExpenses((prev) =>
+          prev.map((e) => (e.id === editingId ? updated : e)),
+        );
+      } else {
+        const created = await api.createExpense({
+          user_id: userId,
+          amount: amountNum,
+          category: category.trim() || null,
+          note: note.trim() || null,
+          spent_at: spentAt ? new Date(spentAt).toISOString() : null,
+        });
+        setExpenses((prev) => [created, ...prev]);
+      }
+      resetForm();
     } catch (err) {
-      setFormError(
-        err instanceof ApiError ? err.message : String(err),
-      );
+      setFormError(err instanceof ApiError ? err.message : String(err));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (expense: Expense) => {
+    setEditingId(expense.id);
+    setAmount(String(expense.amount));
+    setCategory(expense.category ?? "");
+    setNote(expense.note ?? "");
+    setSpentAt(expense.spent_at ? expense.spent_at.slice(0, 16) : "");
+    setFormError(null);
+  };
+
+  const handleDelete = async (expenseId: string) => {
+    if (!userId) return;
+    try {
+      await api.deleteExpense(expenseId, userId);
+      setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+      if (editingId === expenseId) resetForm();
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
     }
   };
 
@@ -127,10 +166,24 @@ export function ExpensesPage() {
             onChange={(e) => setSpentAt(e.target.value)}
           />
         </label>
-        <div className="flex items-end">
+        <div className="flex items-end gap-2">
           <BmoButton type="submit" disabled={submitting || !userId}>
-            {submitting ? "Menyimpan…" : "Tambah"}
+            {submitting
+              ? "Menyimpan…"
+              : editingId
+                ? "Simpan Perubahan"
+                : "Tambah"}
           </BmoButton>
+          {editingId ? (
+            <BmoButton
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={resetForm}
+            >
+              Batal
+            </BmoButton>
+          ) : null}
         </div>
         {formError ? (
           <p className="md:col-span-2 rounded border border-bmo-red/40 bg-pink-50 p-2 text-xs text-bmo-red">
@@ -140,7 +193,9 @@ export function ExpensesPage() {
       </form>
 
       {loading ? <LoadingState /> : null}
-      {error ? <ErrorState error={error} onRetry={() => userId && load(userId)} /> : null}
+      {error ? (
+        <ErrorState error={error} onRetry={() => userId && load(userId)} />
+      ) : null}
       {!loading && !error ? (
         expenses.length === 0 ? (
           <EmptyState
@@ -149,7 +204,11 @@ export function ExpensesPage() {
             description="Coba: catat makan siang 25000"
           />
         ) : (
-          <ExpenseList expenses={expenses} />
+          <ExpenseList
+            expenses={expenses}
+            onEdit={handleEdit}
+            onDelete={(id) => void handleDelete(id)}
+          />
         )
       ) : null}
     </section>
