@@ -4,7 +4,7 @@ import { BmoButton } from "../bmo/BmoButton";
 
 export function PublicNavbar() {
   return (
-    <nav className="sticky top-0 z-30 bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
+    <nav className="sticky top-0 z-30 border-b border-bmo-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link
           to="/"
@@ -16,19 +16,19 @@ export function PublicNavbar() {
         <div className="hidden items-center gap-6 md:flex">
           <a
             href="#fitur"
-            className="cursor-pointer text-sm text-slate-600 hover:text-bmo-dark"
+            className="cursor-pointer text-sm text-slate-600 transition-colors duration-200 hover:text-bmo-dark"
           >
             Fitur
           </a>
           <a
             href="#cara-kerja"
-            className="cursor-pointer text-sm text-slate-600 hover:text-bmo-dark"
+            className="cursor-pointer text-sm text-slate-600 transition-colors duration-200 hover:text-bmo-dark"
           >
             Cara kerja
           </a>
           <a
             href="#faq"
-            className="cursor-pointer text-sm text-slate-600 hover:text-bmo-dark"
+            className="cursor-pointer text-sm text-slate-600 transition-colors duration-200 hover:text-bmo-dark"
           >
             FAQ
           </a>
