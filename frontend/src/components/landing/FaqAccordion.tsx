@@ -13,10 +13,16 @@ export function FaqAccordion({ items }: FaqAccordionProps) {
       {items.map((item, idx) => (
         <details
           key={idx}
-          className="group rounded-lg border border-bmo-border bg-surface-elev open:bg-bmo-screen/30"
+          className="group rounded-lg border border-bmo-border bg-surface-elev transition-all duration-200 open:border-bmo-body open:bg-bmo-screen/30 open:shadow-bmo"
         >
-          <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-bmo-dark">
-            <span>{item.q}</span>
+          <summary className="flex cursor-pointer items-center gap-3 px-4 py-3 text-sm font-medium text-bmo-dark">
+            <span
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-bmo-dark text-[10px] font-bold text-bmo-screen transition-colors duration-200 group-open:bg-bmo-mouth"
+              aria-hidden="true"
+            >
+              {idx + 1}
+            </span>
+            <span className="flex-1">{item.q}</span>
             <svg
               width="16"
               height="16"
@@ -32,7 +38,7 @@ export function FaqAccordion({ items }: FaqAccordionProps) {
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </summary>
-          <div className="border-t border-bmo-border px-4 py-3 text-sm leading-relaxed text-slate-600">
+          <div className="border-t border-bmo-border px-4 py-3 pl-12 text-sm leading-relaxed text-slate-600">
             {item.a}
           </div>
         </details>
