@@ -63,6 +63,7 @@ from app.schemas.dashboard import (
     ExpensePatch,
     LogOut,
     SummaryOut,
+    TaskCreate,
     TaskOut,
     TaskPatch,
 )
@@ -170,13 +171,36 @@ def list_tasks(
     status: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[TaskOut]:
-    """Return tasks owned by ``user_id``, optionally filtered by ``status``.
-
-    Validates: Requirements 12.1, 12.2, 13.6.
-    """
     _ensure_user_exists(db, user_id)
     rows = task_service.list_tasks(db, user_id, status=status)
     return [TaskOut.model_validate(row) for row in rows]
+
+
+@router.post(
+    "/dashboard/tasks",
+    response_model=TaskOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_dashboard_auth)],
+)
+def create_task(
+    payload: TaskCreate,
+    db: Session = Depends(get_db),
+) -> TaskOut:
+    _ensure_user_exists(db, payload.user_id)
+    try:
+        task = task_service.create_task(
+            db,
+            user_id=payload.user_id,
+            title=payload.title,
+            course=payload.course,
+            deadline_at=payload.deadline_at,
+            reminder_at=payload.reminder_at,
+            priority=payload.priority,
+            auto_reminder=payload.auto_reminder,
+        )
+    except (NotFoundError, ValidationError, PermissionDeniedError) as exc:
+        raise _map_service_exceptions(exc)
+    return TaskOut.model_validate(task)
 
 
 @router.patch(

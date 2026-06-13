@@ -70,6 +70,18 @@ class TaskPatch(BaseModel):
     priority: Optional[str] = None
 
 
+class TaskCreate(BaseModel):
+    """Request body for ``POST /dashboard/tasks``."""
+
+    user_id: str
+    title: str
+    course: Optional[str] = None
+    deadline_at: Optional[datetime] = None
+    reminder_at: Optional[datetime] = None
+    priority: Optional[str] = None
+    auto_reminder: bool = False
+
+
 class ExpenseIn(BaseModel):
     """Request body for ``POST /dashboard/expenses``.
 

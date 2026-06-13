@@ -47,6 +47,24 @@ export type TaskPatchInput = Partial<
   >
 >;
 
+export interface TaskCreateInput {
+  user_id: string;
+  title: string;
+  course?: string | null;
+  deadline_at?: string | null;
+  reminder_at?: string | null;
+  priority?: string | null;
+  auto_reminder?: boolean;
+}
+
+export interface ReminderCreateInput {
+  user_id: string;
+  title: string;
+  remind_at: string;
+  channel?: string;
+  task_id?: string | null;
+}
+
 export interface Expense {
   id: string;
   user_id: string;

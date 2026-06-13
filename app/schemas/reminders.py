@@ -19,3 +19,11 @@ class ReminderOut(BaseModel):
     created_at: Optional[datetime] = None
     tts_status: Optional[str] = None
     failure_reason: Optional[str] = None
+
+
+class ReminderCreate(BaseModel):
+    user_id: str
+    title: str
+    remind_at: datetime
+    channel: str = "both"
+    task_id: Optional[str] = None

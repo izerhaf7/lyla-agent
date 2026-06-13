@@ -8,9 +8,9 @@ from app.audio import reminder_tts
 from app.audio.tts_cache import tts_cache
 from app.db import get_db
 from app.models.reminder import Reminder
-from app.schemas.reminders import ReminderOut
+from app.schemas.reminders import ReminderCreate, ReminderOut
 from app.services import reminder_service
-from app.services.exceptions import NotFoundError
+from app.services.exceptions import NotFoundError, ValidationError
 
 
 router = APIRouter(tags=["Reminders"])
@@ -30,6 +30,32 @@ def list_reminders(
         db, user_id, status=status_filter
     )
     return [ReminderOut.model_validate(r) for r in rows]
+
+
+@router.post(
+    "/reminders",
+    response_model=ReminderOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_session)],
+)
+def create_reminder(
+    payload: ReminderCreate,
+    db: Session = Depends(get_db),
+) -> ReminderOut:
+    try:
+        reminder = reminder_service.create_reminder(
+            db,
+            user_id=payload.user_id,
+            title=payload.title,
+            remind_at=payload.remind_at,
+            channel=payload.channel,
+            task_id=payload.task_id,
+        )
+    except (NotFoundError, ValidationError) as exc:
+        if isinstance(exc, NotFoundError):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    return ReminderOut.model_validate(reminder)
 
 
 @router.delete(

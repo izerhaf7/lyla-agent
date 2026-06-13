@@ -17,10 +17,12 @@ import {
   LoginRequest,
   MeResponse,
   RecentLogSummary,
+  ReminderCreateInput,
   ReminderOut,
   RequestTrace,
   StatsResponse,
   Task,
+  TaskCreateInput,
   TaskPatchInput,
   VoiceCommandLog,
 } from "./types";
@@ -113,6 +115,14 @@ export const getSummary = (userId: string): Promise<DashboardSummary> =>
 
 export const getTasks = (userId: string, status?: string): Promise<Task[]> =>
   request<Task[]>(`/dashboard/tasks${qs({ user_id: userId, status })}`);
+
+export const createTask = (
+  input: TaskCreateInput,
+): Promise<Task> =>
+  request<Task>(`/dashboard/tasks`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export const updateTask = (
   taskId: string,
@@ -221,6 +231,14 @@ export const getReminders = (
   request<ReminderOut[]>(
     `/reminders${qs({ user_id: userId, status })}`,
   );
+
+export const createReminder = (
+  input: ReminderCreateInput,
+): Promise<ReminderOut> =>
+  request<ReminderOut>(`/reminders`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export const cancelReminder = (reminderId: string): Promise<void> =>
   request<void>(`/reminders/${encodeURIComponent(reminderId)}`, {
